@@ -1,0 +1,1 @@
+import{S as t}from"./create-element-if-not-defined.C9HaC2X_.js";import{P as r}from"./pagination.FY3L4bsY.js";function e(){new t(".testimonials__swiper--quotes",{modules:[r],direction:"horizontal",spaceBetween:10,initialSlide:0,grabCursor:!0,centeredSlides:!0,pagination:{el:".swiper-pagination",clickable:!0}})}e(),document.addEventListener("astro:after-swap",e);
