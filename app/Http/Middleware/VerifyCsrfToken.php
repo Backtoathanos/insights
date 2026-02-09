@@ -16,6 +16,7 @@ class VerifyCsrfToken extends Middleware
         'plugins/webhooks/*',
         'delivery/*',
         'api/*',
+        'receive',
         '*/embedded-form-*',
         'payments/stripe/credit-card*',
         'frontend/*',

@@ -29,4 +29,7 @@ return [
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
+
+    // Incoming verified-enquiry webhook (website -> insights)
+    'insights_webhook_secret' => env('INSIGHTS_WEBHOOK_SECRET'),
 ];

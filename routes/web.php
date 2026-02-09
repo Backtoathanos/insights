@@ -28,6 +28,9 @@ Route::group(['middleware' => ['installed']], function () {
     Route::get('install/finish', 'InstallController@finish');
 });
 
+// Webhook receiver (secure POST, no CSRF - see VerifyCsrfToken::$except)
+Route::post('receive', 'InsightsReceiveController@receive')->middleware('throttle:60,1');
+
 /*
  * The following routes
  * + customer_files
