@@ -31,6 +31,15 @@ Route::group(['middleware' => ['installed']], function () {
 // Webhook receiver (secure POST, no CSRF - see VerifyCsrfToken::$except)
 Route::post('receive', 'InsightsReceiveController@receive')->middleware('throttle:60,1');
 
+// Digest / newsletter preferences (public, token-based)
+Route::get('digest/unsubscribe/{token}', 'DigestController@unsubscribe')->name('digest.unsubscribe');
+Route::post('digest/unsubscribe/{token}', 'DigestController@doUnsubscribe')->name('digest.do_unsubscribe');
+Route::get('digest/unsubscribed', 'DigestController@unsubscribed')->name('digest.unsubscribed');
+Route::get('digest/preferences/{token}', 'DigestController@preferences')->name('digest.preferences');
+Route::post('digest/preferences/{token}', 'DigestController@savePreferences')->name('digest.save_preferences');
+Route::get('digest/show-more', 'DigestController@showMore')->name('digest.show_more');
+Route::get('digest/not-found', function () { return view('digest.not_found'); })->name('digest.not_found');
+
 /*
  * The following routes
  * + customer_files

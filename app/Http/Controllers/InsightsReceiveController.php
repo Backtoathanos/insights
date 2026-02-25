@@ -3,6 +3,7 @@
 namespace Acelle\Http\Controllers;
 
 use Acelle\Model\SubscriberData;
+use Acelle\Model\NewsletterPreference;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -108,6 +109,19 @@ class InsightsReceiveController extends Controller
             'user_agent' => (string) $request->userAgent(),
             'payload' => json_encode($payload),
         ]);
+
+        // Auto-create newsletter preference for digest (if not exists)
+        $email = $enquiry['email'] ?? null;
+        if ($email && !NewsletterPreference::where('email', $email)->exists()) {
+            NewsletterPreference::create([
+                'email' => $email,
+                'name' => $enquiry['name'] ?? null,
+                'frequency' => NewsletterPreference::FREQUENCY_WEEKLY,
+                'sectors' => $enquiry['interest'] ? [$enquiry['interest']] : config('newsletter.sectors'),
+                'token' => NewsletterPreference::generateToken(),
+                'subscriber_data_id' => (string) $row->id,
+            ]);
+        }
 
         return response()->json([
             'received' => true,

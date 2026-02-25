@@ -90,6 +90,11 @@ class Kernel extends ConsoleKernel
             Campaign::checkAndExecuteScheduledCampaigns();
         })->name('check_and_execute_scheduled_campaigns')->everyMinute();
 
+        // Newsletter digest: daily at 08:00
+        $schedule->command('newsletter:send-digest --frequency=daily')->dailyAt('08:00');
+        // Newsletter digest: weekly on Monday at 08:00
+        $schedule->command('newsletter:send-digest --frequency=weekly')->weeklyOn(1, '08:00');
+
         $licenseTask = $schedule->call(function () {
             Notification::recordIfFails(
                 function () {
