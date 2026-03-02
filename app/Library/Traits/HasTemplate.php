@@ -11,6 +11,7 @@ use League\Pipeline\PipelineBuilder;
 use Acelle\Library\HtmlHandler\ParseRss;
 use Acelle\Library\HtmlHandler\ReplaceBareLineFeed;
 use Acelle\Library\HtmlHandler\AppendHtml;
+use Acelle\Library\HtmlHandler\AppendHtmlBeforeBodyClose;
 use Acelle\Library\HtmlHandler\TransformTag;
 use Acelle\Library\HtmlHandler\InjectTrackingPixel;
 use Acelle\Library\HtmlHandler\MakeInlineCss;
@@ -458,7 +459,8 @@ trait HasTemplate
             $pipeline->add(new AddDoctype());
             $pipeline->add(new AddPreheader($this->preheader));
             $pipeline->add(new RemoveTitleTag());
-            $pipeline->add(new AppendHtml(($this->getHtmlFooter() ?: '') . $this->getDigestFooterHtml()));
+            $pipeline->add(new AppendHtml($this->getHtmlFooter() ?: ''));
+            $pipeline->add(new AppendHtmlBeforeBodyClose($this->getDigestFooterHtml()));
             $pipeline->add(new ParseRss());
             $pipeline->add(new MakeInlineCss($this->template->findCssFiles()));
             $pipeline->add(new TransformWidgets());
