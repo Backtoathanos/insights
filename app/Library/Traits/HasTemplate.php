@@ -342,6 +342,18 @@ trait HasTemplate
     }
 
     /**
+     * Digest footer: Unsubscribe and Change Preferences buttons (uses {DIGEST_UNSUBSCRIBE_URL}, {DIGEST_PREFERENCES_URL}).
+     */
+    public function getDigestFooterHtml()
+    {
+        return '
+<div style="margin-top:24px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#666;text-align:center;">
+    <a href="{DIGEST_UNSUBSCRIBE_URL}" style="display:inline-block;margin:4px 8px;padding:8px 16px;background:#c00;color:#fff!important;text-decoration:none;border-radius:4px;">Unsubscribe</a>
+    <a href="{DIGEST_PREFERENCES_URL}" style="display:inline-block;margin:4px 8px;padding:8px 16px;background:#0066cc;color:#fff!important;text-decoration:none;border-radius:4px;">Change Preferences</a>
+</div>';
+    }
+
+    /**
      * Find sending domain from email.
      *
      * @return mixed
@@ -446,7 +458,7 @@ trait HasTemplate
             $pipeline->add(new AddDoctype());
             $pipeline->add(new AddPreheader($this->preheader));
             $pipeline->add(new RemoveTitleTag());
-            $pipeline->add(new AppendHtml($this->getHtmlFooter()));
+            $pipeline->add(new AppendHtml(($this->getHtmlFooter() ?: '') . $this->getDigestFooterHtml()));
             $pipeline->add(new ParseRss());
             $pipeline->add(new MakeInlineCss($this->template->findCssFiles()));
             $pipeline->add(new TransformWidgets());

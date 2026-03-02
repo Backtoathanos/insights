@@ -212,6 +212,8 @@ class Template extends Model
 
         $tags = array_merge($tags, [
             ['name' => 'UNSUBSCRIBE_URL', 'required' => false],
+            ['name' => 'DIGEST_UNSUBSCRIBE_URL', 'required' => false],
+            ['name' => 'DIGEST_PREFERENCES_URL', 'required' => false],
             ['name' => 'SUBSCRIBER_UID', 'required' => false],
             ['name' => 'WEB_VIEW_URL', 'required' => false],
             ['name' => 'UPDATE_PROFILE_URL', 'required' => false],

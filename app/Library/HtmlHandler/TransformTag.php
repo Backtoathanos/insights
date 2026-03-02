@@ -2,6 +2,7 @@
 
 namespace Acelle\Library\HtmlHandler;
 
+use Acelle\Model\NewsletterPreference;
 use League\Pipeline\StageInterface;
 use Acelle\Library\StringHelper;
 
@@ -47,6 +48,8 @@ class TransformTag implements StageInterface
             $tags['UNSUBSCRIBE_URL'] = $sampleLink;
             $tags['UPDATE_PROFILE_URL'] = $sampleLink;
             $tags['WEB_VIEW_URL'] = $sampleLink;
+            $tags['DIGEST_UNSUBSCRIBE_URL'] = $sampleLink;
+            $tags['DIGEST_PREFERENCES_URL'] = $sampleLink;
             $tags['SUBSCRIBER_UID'] = '%UID%';
 
             $tags['LIST_UID'] = '%LIST-UID%';
@@ -106,6 +109,16 @@ class TransformTag implements StageInterface
             $tags['UNSUBSCRIBE_URL'] = $unsubscribeUrl;
             $tags['WEB_VIEW_URL'] = $webViewUrl;
             $tags['SUBSCRIBER_UID'] = $this->subscriber->uid;
+
+            // Digest unsubscribe / preferences (from newsletter_preferences by email)
+            $pref = NewsletterPreference::where('email', $this->subscriber->email)->whereNull('unsubscribed_at')->first();
+            if ($pref) {
+                $tags['DIGEST_UNSUBSCRIBE_URL'] = url('digest/unsubscribe/' . $pref->token);
+                $tags['DIGEST_PREFERENCES_URL'] = url('digest/preferences/' . $pref->token);
+            } else {
+                $tags['DIGEST_UNSUBSCRIBE_URL'] = $unsubscribeUrl;
+                $tags['DIGEST_PREFERENCES_URL'] = $updateProfileUrl;
+            }
 
             # Subscriber custom fields
             foreach ($this->subscriber->mailList->fields as $field) {
