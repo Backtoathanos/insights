@@ -39,6 +39,7 @@ Route::post('digest/unsubscribe/token/{token}', 'DigestController@doUnsubscribe'
 Route::get('digest/unsubscribe/{email}', 'DigestController@unsubscribeByEmail')->where('email', '.+')->name('digest.unsubscribe.email');
 Route::post('digest/unsubscribe/{email}', 'DigestController@doUnsubscribeByEmail')->where('email', '.+')->name('digest.do_unsubscribe.email');
 Route::get('digest/unsubscribed', 'DigestController@unsubscribed')->name('digest.unsubscribed');
+Route::get('digest/stayed-subscribed', 'DigestController@stayedSubscribed')->name('digest.stayed_subscribed');
 Route::get('digest/preferences/{token}', 'DigestController@preferences')->name('digest.preferences');
 Route::post('digest/preferences/{token}', 'DigestController@savePreferences')->name('digest.save_preferences');
 Route::get('digest/show-more', 'DigestController@showMore')->name('digest.show_more');

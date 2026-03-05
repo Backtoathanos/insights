@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title>Unsubscribed - Blackridge Research</title>
+    <title>Still Subscribed - Blackridge Research</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12,12 +12,15 @@
         :root {
             --br-primary: #1a365d;
             --br-primary-light: #2c5282;
+            --br-success: #38a169;
+            --br-success-hover: #2f855a;
             --br-text: #2d3748;
             --br-text-muted: #718096;
             --br-border: #e2e8f0;
             --br-bg: #f7fafc;
             --br-white: #ffffff;
             --br-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --br-radius: 12px;
             --br-radius-lg: 16px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -56,11 +59,12 @@
 <body>
     <div class="card">
         <div class="card-header">
-            <h1>You have been unsubscribed</h1>
-            <p>You will no longer receive digest emails from us.</p>
+            <h1>You're still subscribed</h1>
+            <p>You will continue to receive our digest emails</p>
         </div>
         <div class="card-body">
-            <p>You can close this window.</p>
+            <p>Thank you for staying with us. We'll keep sending you industry insights and updates.</p>
+            <p class="muted">You can close this window.</p>
         </div>
     </div>
 </body>

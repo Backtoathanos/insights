@@ -157,11 +157,8 @@
             <form method="post" action="{{ route('digest.do_unsubscribe.email', ['email' => $email]) }}" class="actions">
                 @csrf
                 <button type="submit" class="btn btn-primary">Yes, unsubscribe me</button>
-                <a href="{{ url('/') }}" class="btn btn-secondary">No, keep me subscribed</a>
+                <a href="{{ route('digest.stayed_subscribed') }}" class="btn btn-secondary">No, keep me subscribed</a>
             </form>
-            <p class="footer-note">
-                Changed your mind? <a href="{{ url('/') }}">Return to homepage</a>
-            </p>
         </div>
     </div>
 </body>

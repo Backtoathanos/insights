@@ -84,6 +84,14 @@ class DigestController extends Controller
         return view('digest.unsubscribed');
     }
 
+    /**
+     * Shown when user chooses "No, keep me subscribed".
+     */
+    public function stayedSubscribed()
+    {
+        return view('digest.stayed_subscribed');
+    }
+
     public function preferences(string $token)
     {
         $pref = NewsletterPreference::findActiveByToken($token);
