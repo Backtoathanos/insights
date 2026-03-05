@@ -138,14 +138,14 @@ class InsightsReceiveController extends Controller
             ]);
         }
 
-        // Optional: sync to brsubscribers when digest mail list is configured
-        $digestMailListId = config('newsletter.digest.mail_list_id');
-        if ($email && $digestMailListId) {
-            $list = MailList::find($digestMailListId);
+        // Sync to brsubscribers (primary) with duplicate check
+        if ($email) {
+            $digestMailListId = config('newsletter.digest.mail_list_id') ?: env('NEWSLETTER_DIGEST_MAIL_LIST_ID');
+            $list = $digestMailListId ? MailList::find($digestMailListId) : MailList::first();
             if ($list && !$list->subscribers()->where('email', $email)->exists()) {
-                $sub = $list->subscribers()->firstOrNew(['email' => $email, 'mail_list_id' => $list->id]);
+                $sub = $list->subscribers()->firstOrNew(['email' => $email], ['mail_list_id' => $list->id]);
                 $sub->status = Subscriber::STATUS_SUBSCRIBED;
-                $sub->from = 'website-server-apis';
+                $sub->from = $payload['source'] ?? 'website-server-apis';
                 $sub->ip = $request->ip() ?? '';
                 $sub->subscription_type = Subscriber::SUBSCRIPTION_TYPE_SINGLE_OPTIN;
                 $sub->verification_status = Subscriber::VERIFICATION_STATUS_DELIVERABLE;
