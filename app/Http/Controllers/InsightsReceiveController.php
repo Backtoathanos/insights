@@ -9,6 +9,7 @@ use Acelle\Model\Subscriber;
 use Acelle\Model\MailList;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class InsightsReceiveController extends Controller
@@ -126,33 +127,52 @@ class InsightsReceiveController extends Controller
             ]);
         }
 
-        // Sync to digest_subscribers with duplicate check (by email)
-        if ($email && !DigestSubscriber::existsByEmail($email)) {
-            DigestSubscriber::create([
-                'email' => $email,
-                'name' => $enquiry['name'] ?? null,
-                'ip' => $request->ip(),
-                'subscription_type' => 'webhook',
-                'verification_status' => 'deliverable',
-                'verified_at' => $verifiedAt,
-            ]);
-        }
-
-        // Sync to brsubscribers (primary) with duplicate check
+        // Sync to brsubscribers (primary) with duplicate check - use direct DB insert to avoid model side effects
         if ($email) {
             $digestMailListId = config('newsletter.digest.mail_list_id') ?: env('NEWSLETTER_DIGEST_MAIL_LIST_ID');
-            $list = $digestMailListId ? MailList::find($digestMailListId) : MailList::first();
-            if ($list && !$list->subscribers()->where('email', $email)->exists()) {
-                $sub = $list->subscribers()->firstOrNew(['email' => $email], ['mail_list_id' => $list->id]);
-                $sub->status = Subscriber::STATUS_SUBSCRIBED;
-                $sub->from = $payload['source'] ?? 'website-server-apis';
-                $sub->ip = $request->ip() ?? '';
-                $sub->subscription_type = Subscriber::SUBSCRIPTION_TYPE_SINGLE_OPTIN;
-                $sub->verification_status = Subscriber::VERIFICATION_STATUS_DELIVERABLE;
-                $sub->last_verification_at = $verifiedAt;
-                $sub->last_verification_by = 'webhook';
-                $sub->last_verification_result = 'email_verified';
-                $sub->save();
+            $list = ($digestMailListId ? MailList::find($digestMailListId) : null) ?: MailList::first();
+            if ($list) {
+                $subscribersTable = \table('subscribers');
+                $exists = DB::table($subscribersTable)
+                    ->where('mail_list_id', $list->id)
+                    ->where('email', $email)
+                    ->exists();
+                if (!$exists) {
+                    $now = now();
+                    DB::table($subscribersTable)->insert([
+                        'uid' => uniqid(),
+                        'mail_list_id' => $list->id,
+                        'email' => $email,
+                        'status' => Subscriber::STATUS_SUBSCRIBED,
+                        'from' => $payload['source'] ?? 'website-server-apis',
+                        'ip' => $request->ip() ?? '',
+                        'subscription_type' => Subscriber::SUBSCRIPTION_TYPE_SINGLE_OPTIN,
+                        'verification_status' => Subscriber::VERIFICATION_STATUS_DELIVERABLE,
+                        'last_verification_at' => $verifiedAt,
+                        'last_verification_by' => 'webhook',
+                        'last_verification_result' => 'email_verified',
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                }
+            }
+        }
+
+        // Sync to digest_subscribers with duplicate check (optional, non-blocking)
+        if ($email) {
+            try {
+                if (!DigestSubscriber::existsByEmail($email)) {
+                    DigestSubscriber::create([
+                        'email' => $email,
+                        'name' => $enquiry['name'] ?? null,
+                        'ip' => $request->ip(),
+                        'subscription_type' => 'webhook',
+                        'verification_status' => 'deliverable',
+                        'verified_at' => $verifiedAt,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                // digest_subscribers table may not exist; don't block brsubscribers sync
             }
         }
 
