@@ -2,7 +2,6 @@
 
 namespace Acelle\Http\Controllers;
 
-use Acelle\Model\SubscriberData;
 use Acelle\Model\NewsletterPreference;
 use Acelle\Model\DigestSubscriber;
 use Acelle\Model\Subscriber;
@@ -68,6 +67,11 @@ class InsightsReceiveController extends Controller
         }
 
         $enquiry = $payload['enquiry'] ?? [];
+        $email = $enquiry['email'] ?? null;
+
+        if (!$email) {
+            return response()->json(['error' => 'Email required'], 422);
+        }
 
         $verifiedAt = null;
         if (!empty($payload['verified_at'])) {
@@ -78,107 +82,74 @@ class InsightsReceiveController extends Controller
             }
         }
 
-        $createdDate = null;
-        if (!empty($enquiry['created_date'])) {
-            try {
-                $createdDate = Carbon::parse($enquiry['created_date']);
-            } catch (\Throwable $e) {
-                $createdDate = null;
-            }
+        // PRIMARY: Insert into brsubscribers (not brsubscribers_data)
+        $subscriberId = null;
+        $digestMailListId = config('newsletter.digest.mail_list_id') ?: env('NEWSLETTER_DIGEST_MAIL_LIST_ID');
+        $list = ($digestMailListId ? MailList::find($digestMailListId) : null) ?: MailList::first();
+
+        if (!$list) {
+            return response()->json([
+                'error' => 'No mail list configured. Set NEWSLETTER_DIGEST_MAIL_LIST_ID in .env or create a mail list.',
+            ], 500);
         }
 
-        $row = SubscriberData::create([
-            'source' => $payload['source'] ?? null,
-            'event' => $payload['event'] ?? null,
-            'verified_at' => $verifiedAt,
-            'enquiry_id' => is_numeric($enquiry['id'] ?? null) ? (int) $enquiry['id'] : null,
-            'name' => $enquiry['name'] ?? null,
-            'email' => $enquiry['email'] ?? null,
-            'phone' => $enquiry['phone'] ?? null,
-            'company' => $enquiry['company'] ?? null,
-            'country' => $enquiry['country'] ?? null,
-            'interest' => $enquiry['interest'] ?? null,
-            'message' => $enquiry['message'] ?? null,
-            'page' => $enquiry['page'] ?? null,
-            'type' => $enquiry['type'] ?? null,
-            'created_date' => $createdDate,
-            'state' => $enquiry['state'] ?? null,
-            'gclid' => $enquiry['gclid'] ?? null,
-            'utm_source' => $enquiry['utm_source'] ?? null,
-            'utm_medium' => $enquiry['utm_medium'] ?? null,
-            'utm_campaign' => $enquiry['utm_campaign'] ?? null,
-            'utm_term' => $enquiry['utm_term'] ?? null,
-            'utm_content' => $enquiry['utm_content'] ?? null,
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'payload' => json_encode($payload),
-        ]);
+        $existing = DB::table('subscribers')
+            ->where('mail_list_id', $list->id)
+            ->where('email', $email)
+            ->first();
+
+        if (!$existing) {
+            $now = now();
+            $subscriberId = DB::table('subscribers')->insertGetId([
+                'uid' => uniqid(),
+                'mail_list_id' => $list->id,
+                'email' => $email,
+                'status' => Subscriber::STATUS_SUBSCRIBED,
+                'from' => $payload['source'] ?? 'website-server-apis',
+                'ip' => $request->ip() ?? '',
+                'subscription_type' => Subscriber::SUBSCRIPTION_TYPE_SINGLE_OPTIN,
+                'verification_status' => Subscriber::VERIFICATION_STATUS_DELIVERABLE,
+                'last_verification_at' => $verifiedAt,
+                'last_verification_by' => 'webhook',
+                'last_verification_result' => 'email_verified',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        } else {
+            $subscriberId = $existing->id;
+        }
 
         // Auto-create newsletter preference for digest (if not exists)
-        $email = $enquiry['email'] ?? null;
-        if ($email && !NewsletterPreference::where('email', $email)->exists()) {
+        if (!NewsletterPreference::where('email', $email)->exists()) {
             NewsletterPreference::create([
                 'email' => $email,
                 'name' => $enquiry['name'] ?? null,
                 'frequency' => NewsletterPreference::FREQUENCY_WEEKLY,
                 'sectors' => $enquiry['interest'] ? [$enquiry['interest']] : config('newsletter.sectors'),
                 'token' => NewsletterPreference::generateToken(),
-                'subscriber_data_id' => (string) $row->id,
+                'subscriber_data_id' => null,
             ]);
         }
 
-        // Sync to brsubscribers (primary) with duplicate check - use direct DB insert to avoid model side effects
-        if ($email) {
-            $digestMailListId = config('newsletter.digest.mail_list_id') ?: env('NEWSLETTER_DIGEST_MAIL_LIST_ID');
-            $list = ($digestMailListId ? MailList::find($digestMailListId) : null) ?: MailList::first();
-            if ($list) {
-                // Use base table name 'subscribers' - Laravel adds DB_TABLES_PREFIX automatically
-                $exists = DB::table('subscribers')
-                    ->where('mail_list_id', $list->id)
-                    ->where('email', $email)
-                    ->exists();
-                if (!$exists) {
-                    $now = now();
-                    DB::table('subscribers')->insert([
-                        'uid' => uniqid(),
-                        'mail_list_id' => $list->id,
-                        'email' => $email,
-                        'status' => Subscriber::STATUS_SUBSCRIBED,
-                        'from' => $payload['source'] ?? 'website-server-apis',
-                        'ip' => $request->ip() ?? '',
-                        'subscription_type' => Subscriber::SUBSCRIPTION_TYPE_SINGLE_OPTIN,
-                        'verification_status' => Subscriber::VERIFICATION_STATUS_DELIVERABLE,
-                        'last_verification_at' => $verifiedAt,
-                        'last_verification_by' => 'webhook',
-                        'last_verification_result' => 'email_verified',
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ]);
-                }
-            }
-        }
-
         // Sync to digest_subscribers with duplicate check (optional, non-blocking)
-        if ($email) {
-            try {
-                if (!DigestSubscriber::existsByEmail($email)) {
-                    DigestSubscriber::create([
-                        'email' => $email,
-                        'name' => $enquiry['name'] ?? null,
-                        'ip' => $request->ip(),
-                        'subscription_type' => 'webhook',
-                        'verification_status' => 'deliverable',
-                        'verified_at' => $verifiedAt,
-                    ]);
-                }
-            } catch (\Throwable $e) {
-                // digest_subscribers table may not exist; don't block brsubscribers sync
+        try {
+            if (!DigestSubscriber::existsByEmail($email)) {
+                DigestSubscriber::create([
+                    'email' => $email,
+                    'name' => $enquiry['name'] ?? null,
+                    'ip' => $request->ip(),
+                    'subscription_type' => 'webhook',
+                    'verification_status' => 'deliverable',
+                    'verified_at' => $verifiedAt,
+                ]);
             }
+        } catch (\Throwable $e) {
+            // digest_subscribers table may not exist; don't block
         }
 
         return response()->json([
             'received' => true,
-            'id' => $row->id,
+            'id' => $subscriberId,
         ]);
     }
 }
