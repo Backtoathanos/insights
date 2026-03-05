@@ -17,7 +17,21 @@
         .show-more a { display: inline-block; padding: 10px 20px; background: #0066cc; color: #fff !important; text-decoration: none; border-radius: 4px; }
         .footer-links { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 14px; }
         .footer-links a { color: #0066cc; text-decoration: none; margin-right: 15px; }
-        .footer-unsubscribe { margin-top: 15px; font-size: 12px; color: #888; }
+        .footer-actions { margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee; }
+        .footer-actions a {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px 8px 5px 0;
+            background: #0066cc;
+            color: #fff !important;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .footer-actions a.btn-unsubscribe {
+            background: #718096;
+        }
     </style>
 </head>
 <body>
@@ -57,9 +71,9 @@
         <a href="{{ $links['project_tracker'] ?? '#' }}">Global Project Tracker</a>
     </div>
 
-    <div class="footer-unsubscribe">
-        <a href="{{ url('digest/preferences/email/' . rawurlencode($preference->email)) }}">Change preferences</a> ·
-        <a href="{{ url('digest/unsubscribe/' . rawurlencode($preference->email)) }}">Unsubscribe</a>
+    <div class="footer-actions">
+        <a href="{{ url('digest/preferences/email/' . rawurlencode($preference->email)) }}">Change preference</a>
+        <a href="{{ url('digest/unsubscribe/' . rawurlencode($preference->email)) }}" class="btn-unsubscribe">Unsubscribe</a>
     </div>
 </body>
 </html>
