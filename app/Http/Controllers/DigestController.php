@@ -94,6 +94,7 @@ class DigestController extends Controller
 
     /**
      * Preferences by email - URL: /digest/preferences/email/user@example.com
+     * Shows page if email exists in newsletter_preferences OR brsubscribers (creates preference if needed).
      */
     public function preferencesByEmail(string $email)
     {
@@ -101,9 +102,19 @@ class DigestController extends Controller
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return view('digest.not_found');
         }
-        $pref = NewsletterPreference::findActiveByEmail($email);
+        $pref = NewsletterPreference::where('email', $email)->first();
         if (!$pref) {
-            return view('digest.not_found');
+            // Not in newsletter_preferences - check brsubscribers and create preference if found
+            $inBrsubscribers = DB::table('subscribers')->where('email', $email)->exists();
+            if (!$inBrsubscribers) {
+                return view('digest.not_found');
+            }
+            $pref = NewsletterPreference::create([
+                'email' => $email,
+                'frequency' => NewsletterPreference::FREQUENCY_WEEKLY,
+                'sectors' => config('newsletter.sectors', []),
+                'token' => NewsletterPreference::generateToken(),
+            ]);
         }
         return view('digest.preferences', [
             'preference' => $pref,
@@ -118,13 +129,23 @@ class DigestController extends Controller
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return redirect()->route('digest.not_found');
         }
-        $pref = NewsletterPreference::findActiveByEmail($email);
+        $pref = NewsletterPreference::where('email', $email)->first();
         if (!$pref) {
-            return redirect()->route('digest.not_found');
+            $inBrsubscribers = DB::table('subscribers')->where('email', $email)->exists();
+            if (!$inBrsubscribers) {
+                return redirect()->route('digest.not_found');
+            }
+            $pref = NewsletterPreference::create([
+                'email' => $email,
+                'frequency' => $request->input('frequency', 'weekly'),
+                'sectors' => $request->input('sectors', []),
+                'token' => NewsletterPreference::generateToken(),
+            ]);
+        } else {
+            $pref->frequency = $request->input('frequency', 'weekly');
+            $pref->sectors = $request->input('sectors', []);
+            $pref->save();
         }
-        $pref->frequency = $request->input('frequency', 'weekly');
-        $pref->sectors = $request->input('sectors', []);
-        $pref->save();
         return redirect()->route('digest.preferences.email', ['email' => $email])
             ->with('success', 'Preferences updated.');
     }
