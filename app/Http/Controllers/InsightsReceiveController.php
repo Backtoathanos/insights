@@ -132,14 +132,14 @@ class InsightsReceiveController extends Controller
             $digestMailListId = config('newsletter.digest.mail_list_id') ?: env('NEWSLETTER_DIGEST_MAIL_LIST_ID');
             $list = ($digestMailListId ? MailList::find($digestMailListId) : null) ?: MailList::first();
             if ($list) {
-                $subscribersTable = \table('subscribers');
-                $exists = DB::table($subscribersTable)
+                // Use base table name 'subscribers' - Laravel adds DB_TABLES_PREFIX automatically
+                $exists = DB::table('subscribers')
                     ->where('mail_list_id', $list->id)
                     ->where('email', $email)
                     ->exists();
                 if (!$exists) {
                     $now = now();
-                    DB::table($subscribersTable)->insert([
+                    DB::table('subscribers')->insert([
                         'uid' => uniqid(),
                         'mail_list_id' => $list->id,
                         'email' => $email,
