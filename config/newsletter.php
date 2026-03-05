@@ -24,5 +24,6 @@ return [
     'digest' => [
         'items_in_email' => 5,
         'show_more_threshold' => 5,
+        'mail_list_id' => env('NEWSLETTER_DIGEST_MAIL_LIST_ID'), // optional: sync to brsubscribers
     ],
 ];

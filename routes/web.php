@@ -31,9 +31,13 @@ Route::group(['middleware' => ['installed']], function () {
 // Webhook receiver (secure POST, no CSRF - see VerifyCsrfToken::$except)
 Route::post('receive', 'InsightsReceiveController@receive')->middleware('throttle:60,1');
 
-// Digest / newsletter preferences (public, token-based)
-Route::get('digest/unsubscribe/{token}', 'DigestController@unsubscribe')->name('digest.unsubscribe');
-Route::post('digest/unsubscribe/{token}', 'DigestController@doUnsubscribe')->name('digest.do_unsubscribe');
+// Digest / newsletter preferences (public)
+// Token-based (legacy) - must be before {email} route
+Route::get('digest/unsubscribe/token/{token}', 'DigestController@unsubscribe')->name('digest.unsubscribe');
+Route::post('digest/unsubscribe/token/{token}', 'DigestController@doUnsubscribe')->name('digest.do_unsubscribe');
+// Email-based unsubscribe: /digest/unsubscribe/user@example.com (use %40 for @ in URL)
+Route::get('digest/unsubscribe/{email}', 'DigestController@unsubscribeByEmail')->where('email', '.+')->name('digest.unsubscribe.email');
+Route::post('digest/unsubscribe/{email}', 'DigestController@doUnsubscribeByEmail')->where('email', '.+')->name('digest.do_unsubscribe.email');
 Route::get('digest/unsubscribed', 'DigestController@unsubscribed')->name('digest.unsubscribed');
 Route::get('digest/preferences/{token}', 'DigestController@preferences')->name('digest.preferences');
 Route::post('digest/preferences/{token}', 'DigestController@savePreferences')->name('digest.save_preferences');

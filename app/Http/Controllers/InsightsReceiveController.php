@@ -4,6 +4,9 @@ namespace Acelle\Http\Controllers;
 
 use Acelle\Model\SubscriberData;
 use Acelle\Model\NewsletterPreference;
+use Acelle\Model\DigestSubscriber;
+use Acelle\Model\Subscriber;
+use Acelle\Model\MailList;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -121,6 +124,36 @@ class InsightsReceiveController extends Controller
                 'token' => NewsletterPreference::generateToken(),
                 'subscriber_data_id' => (string) $row->id,
             ]);
+        }
+
+        // Sync to digest_subscribers with duplicate check (by email)
+        if ($email && !DigestSubscriber::existsByEmail($email)) {
+            DigestSubscriber::create([
+                'email' => $email,
+                'name' => $enquiry['name'] ?? null,
+                'ip' => $request->ip(),
+                'subscription_type' => 'webhook',
+                'verification_status' => 'deliverable',
+                'verified_at' => $verifiedAt,
+            ]);
+        }
+
+        // Optional: sync to brsubscribers when digest mail list is configured
+        $digestMailListId = config('newsletter.digest.mail_list_id');
+        if ($email && $digestMailListId) {
+            $list = MailList::find($digestMailListId);
+            if ($list && !$list->subscribers()->where('email', $email)->exists()) {
+                $sub = $list->subscribers()->firstOrNew(['email' => $email, 'mail_list_id' => $list->id]);
+                $sub->status = Subscriber::STATUS_SUBSCRIBED;
+                $sub->from = 'website-server-apis';
+                $sub->ip = $request->ip() ?? '';
+                $sub->subscription_type = Subscriber::SUBSCRIPTION_TYPE_SINGLE_OPTIN;
+                $sub->verification_status = Subscriber::VERIFICATION_STATUS_DELIVERABLE;
+                $sub->last_verification_at = $verifiedAt;
+                $sub->last_verification_by = 'webhook';
+                $sub->last_verification_result = 'email_verified';
+                $sub->save();
+            }
         }
 
         return response()->json([
