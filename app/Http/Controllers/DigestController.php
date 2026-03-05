@@ -92,6 +92,43 @@ class DigestController extends Controller
         return view('digest.stayed_subscribed');
     }
 
+    /**
+     * Preferences by email - URL: /digest/preferences/email/user@example.com
+     */
+    public function preferencesByEmail(string $email)
+    {
+        $email = trim($email);
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return view('digest.not_found');
+        }
+        $pref = NewsletterPreference::findActiveByEmail($email);
+        if (!$pref) {
+            return view('digest.not_found');
+        }
+        return view('digest.preferences', [
+            'preference' => $pref,
+            'sectors' => config('newsletter.sectors', []),
+            'useEmailUrl' => true,
+        ]);
+    }
+
+    public function savePreferencesByEmail(Request $request, string $email)
+    {
+        $email = trim($email);
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return redirect()->route('digest.not_found');
+        }
+        $pref = NewsletterPreference::findActiveByEmail($email);
+        if (!$pref) {
+            return redirect()->route('digest.not_found');
+        }
+        $pref->frequency = $request->input('frequency', 'weekly');
+        $pref->sectors = $request->input('sectors', []);
+        $pref->save();
+        return redirect()->route('digest.preferences.email', ['email' => $email])
+            ->with('success', 'Preferences updated.');
+    }
+
     public function preferences(string $token)
     {
         $pref = NewsletterPreference::findActiveByToken($token);
@@ -101,6 +138,7 @@ class DigestController extends Controller
         return view('digest.preferences', [
             'preference' => $pref,
             'sectors' => config('newsletter.sectors', []),
+            'useEmailUrl' => false,
         ]);
     }
 

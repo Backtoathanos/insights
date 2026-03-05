@@ -58,7 +58,7 @@
     </div>
 
     <div class="footer-unsubscribe">
-        <a href="{{ url('digest/preferences/' . $preference->token) }}">Change preferences</a> ·
+        <a href="{{ url('digest/preferences/email/' . rawurlencode($preference->email)) }}">Change preferences</a> ·
         <a href="{{ url('digest/unsubscribe/' . rawurlencode($preference->email)) }}">Unsubscribe</a>
     </div>
 </body>
