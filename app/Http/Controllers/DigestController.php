@@ -217,15 +217,30 @@ class DigestController extends Controller
         }
 
         $categories = config('newsletter.marketing.categories', []);
-        $result = [];
+        $all = [];
         foreach ($categories as $key => $label) {
             $items = $data[$key] ?? [];
             if (is_array($items) && !empty($items)) {
-                $result[$key] = [
-                    'label' => $label,
-                    'articles' => array_slice($items, 0, 10),
-                ];
+                foreach ($items as $item) {
+                    $item['_category_key'] = $key;
+                    $item['_category_label'] = $label;
+                    $all[] = $item;
+                }
             }
+        }
+        $all = array_slice($all, 0, 10);
+        if (empty($all)) {
+            return [];
+        }
+        $result = [];
+        foreach ($all as $item) {
+            $key = $item['_category_key'];
+            $label = $item['_category_label'];
+            unset($item['_category_key'], $item['_category_label']);
+            if (!isset($result[$key])) {
+                $result[$key] = ['label' => $label, 'articles' => []];
+            }
+            $result[$key]['articles'][] = $item;
         }
         return $result;
     }
