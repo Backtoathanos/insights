@@ -7,8 +7,11 @@ use Acelle\Model\DigestSubscriber;
 use Acelle\Model\Subscriber;
 use Acelle\Model\MailList;
 use Acelle\Model\DigestContentItem;
+use Acelle\Mail\MarketingEmailMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 
 class DigestController extends Controller
 {
@@ -190,5 +193,121 @@ class DigestController extends Controller
             'date' => $date,
             'sectors' => $sectors,
         ]);
+    }
+
+    /**
+     * Fetch marketing articles from external API.
+     * Returns array of [categoryKey => [articles...]] - only categories with data.
+     */
+    protected function fetchMarketingArticles(?string $date = null): array
+    {
+        $date = $date ?: now()->format('d-m-Y');
+        $apiUrl = config('newsletter.marketing.api_url');
+        $token = config('newsletter.marketing.api_token');
+        $url = $apiUrl . '?token=' . urlencode($token) . '&date=' . urlencode($date);
+
+        $response = Http::timeout(30)->get($url);
+        if (!$response->successful()) {
+            return [];
+        }
+
+        $data = $response->json();
+        if (!is_array($data)) {
+            return [];
+        }
+
+        $categories = config('newsletter.marketing.categories', []);
+        $result = [];
+        foreach ($categories as $key => $label) {
+            $items = $data[$key] ?? [];
+            if (is_array($items) && !empty($items)) {
+                $result[$key] = [
+                    'label' => $label,
+                    'articles' => $items,
+                ];
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * Cronjob endpoint: /digest/marketingmail
+     * Fetches articles from API, sends marketing email to all brsubscribers.
+     * If no categories have data, no email is sent.
+     */
+    public function marketingMail(Request $request)
+    {
+        $date = $request->query('date'); // optional: DD-MM-YYYY
+        $categories = $this->fetchMarketingArticles($date);
+
+        if (empty($categories)) {
+            return response()->json([
+                'sent' => false,
+                'message' => 'No article data available for any category. Email not sent.',
+            ], 200);
+        }
+
+        $digestMailListId = config('newsletter.digest.mail_list_id') ?: env('NEWSLETTER_DIGEST_MAIL_LIST_ID');
+        $list = ($digestMailListId ? MailList::find($digestMailListId) : null) ?: MailList::first();
+        if (!$list) {
+            return response()->json([
+                'sent' => false,
+                'error' => 'No mail list configured. Set NEWSLETTER_DIGEST_MAIL_LIST_ID.',
+            ], 500);
+        }
+
+        $subscribers = DB::table('subscribers')
+            ->where('mail_list_id', $list->id)
+            ->where('status', Subscriber::STATUS_SUBSCRIBED)
+            ->pluck('email');
+
+        $sent = 0;
+        foreach ($subscribers as $email) {
+            try {
+                Mail::to($email)->send(new MarketingEmailMail($categories));
+                $sent++;
+            } catch (\Throwable $e) {
+                // Log but continue
+            }
+        }
+
+        return response()->json([
+            'sent' => true,
+            'count' => $sent,
+            'categories' => array_keys($categories),
+        ], 200);
+    }
+
+    /**
+     * Test form: /digest/marketingmailcheck
+     */
+    public function marketingMailCheckForm()
+    {
+        return view('digest.marketing_mail_check');
+    }
+
+    /**
+     * Process test form - send marketing email to single address.
+     */
+    public function marketingMailCheckSubmit(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+
+        $date = $request->input('date'); // optional
+        $categories = $this->fetchMarketingArticles($date);
+
+        if (empty($categories)) {
+            return redirect()->route('digest.marketing_mail_check')
+                ->with('error', 'No article data available for any category. Email not sent.');
+        }
+
+        try {
+            Mail::to($request->email)->send(new MarketingEmailMail($categories));
+            return redirect()->route('digest.marketing_mail_check')
+                ->with('success', 'Test marketing email sent to ' . $request->email);
+        } catch (\Throwable $e) {
+            return redirect()->route('digest.marketing_mail_check')
+                ->with('error', 'Failed to send: ' . $e->getMessage());
+        }
     }
 }
