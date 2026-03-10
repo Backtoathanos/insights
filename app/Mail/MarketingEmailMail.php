@@ -15,10 +15,13 @@ class MarketingEmailMail extends Mailable
 
     public string $blogUrl;
 
-    public function __construct(array $categories)
+    public string $recipientEmail;
+
+    public function __construct(array $categories, string $recipientEmail = '')
     {
         $this->categories = $categories;
-        $this->blogUrl = config('newsletter.marketing.blog_url', 'https://www.blackridgeresearch.com/');
+        $this->blogUrl = rtrim(config('newsletter.marketing.blog_url', 'https://www.blackridgeresearch.com/'), '/');
+        $this->recipientEmail = $recipientEmail;
     }
 
     public function build()

@@ -223,7 +223,7 @@ class DigestController extends Controller
             if (is_array($items) && !empty($items)) {
                 $result[$key] = [
                     'label' => $label,
-                    'articles' => $items,
+                    'articles' => array_slice($items, 0, 10),
                 ];
             }
         }
@@ -264,7 +264,7 @@ class DigestController extends Controller
         $sent = 0;
         foreach ($subscribers as $email) {
             try {
-                Mail::to($email)->send(new MarketingEmailMail($categories));
+                Mail::to($email)->send(new MarketingEmailMail($categories, $email));
                 $sent++;
             } catch (\Throwable $e) {
                 // Log but continue
@@ -302,7 +302,7 @@ class DigestController extends Controller
         }
 
         try {
-            Mail::to($request->email)->send(new MarketingEmailMail($categories));
+            Mail::to($request->email)->send(new MarketingEmailMail($categories, $request->email));
             return redirect()->route('digest.marketing_mail_check')
                 ->with('success', 'Test marketing email sent to ' . $request->email);
         } catch (\Throwable $e) {
