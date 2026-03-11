@@ -37,8 +37,8 @@
             @foreach($category['articles'] as $article)
                 @php
                     $title = $article['title'] ?? 'Untitled';
-                    $articleUrl = $blogUrl . '/blog/' . ($article['slug'] ?? '');
-                    $descText = !empty($article['excerpt']) ? $article['excerpt'] : $title;
+                    $articleUrl = $article['url'] ?? '';
+                    $descText = !empty($article['description']) ? $article['description'] : $title;
                     $truncated = \Illuminate\Support\Str::limit($descText, 80);
                 @endphp
                 <div class="item">
