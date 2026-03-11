@@ -246,6 +246,46 @@ class DigestController extends Controller
     }
 
     /**
+     * Filter categories by subscriber sectors. Returns only categories matching the sectors.
+     */
+    protected function filterCategoriesBySectors(array $categories, array $sectors): array
+    {
+        if (empty($sectors) || in_array('All', $sectors, true)) {
+            return $categories;
+        }
+
+        $mapping = config('newsletter.marketing.sector_to_category', []);
+        $allowedCategories = [];
+        foreach ($sectors as $sector) {
+            $cats = $mapping[$sector] ?? [];
+            $allowedCategories = array_merge($allowedCategories, $cats);
+        }
+        $allowedCategories = array_unique($allowedCategories);
+
+        if (empty($allowedCategories)) {
+            return $categories;
+        }
+
+        $filtered = [];
+        foreach ($categories as $key => $data) {
+            if (in_array($key, $allowedCategories, true)) {
+                $filtered[$key] = $data;
+            }
+        }
+        return $filtered;
+    }
+
+    /**
+     * Get sectors for an email from newsletter_preferences.
+     */
+    protected function getSectorsForEmail(string $email): array
+    {
+        $pref = NewsletterPreference::where('email', $email)->first();
+        $sectors = $pref && is_array($pref->sectors) ? $pref->sectors : [];
+        return !empty($sectors) ? $sectors : ['All'];
+    }
+
+    /**
      * Cronjob endpoint: /digest/marketingmail
      * Fetches articles from API, sends marketing email to all brsubscribers.
      * If no categories have data, no email is sent.
@@ -279,7 +319,12 @@ class DigestController extends Controller
         $sent = 0;
         foreach ($subscribers as $email) {
             try {
-                Mail::to($email)->send(new MarketingEmailMail($categories, $email));
+                $sectors = $this->getSectorsForEmail($email);
+                $filtered = $this->filterCategoriesBySectors($categories, $sectors);
+                if (empty($filtered)) {
+                    continue;
+                }
+                Mail::to($email)->send(new MarketingEmailMail($filtered, $email));
                 $sent++;
             } catch (\Throwable $e) {
                 // Log but continue
@@ -317,7 +362,13 @@ class DigestController extends Controller
         }
 
         try {
-            Mail::to($request->email)->send(new MarketingEmailMail($categories, $request->email));
+            $sectors = $this->getSectorsForEmail($request->email);
+            $filtered = $this->filterCategoriesBySectors($categories, $sectors);
+            if (empty($filtered)) {
+                return redirect()->route('digest.marketing_mail_check')
+                    ->with('error', 'No articles match your sector preferences. Save preferences at Change preference first.');
+            }
+            Mail::to($request->email)->send(new MarketingEmailMail($filtered, $request->email));
             return redirect()->route('digest.marketing_mail_check')
                 ->with('success', 'Test marketing email sent to ' . $request->email);
         } catch (\Throwable $e) {
