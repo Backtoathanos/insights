@@ -44,14 +44,14 @@
         @foreach($items as $item)
             <div class="item">
                 <div class="item-title">
-                    @if($item->url)
-                        <a href="{{ $item->url }}">{{ $item->title }}</a>
+                    @if($item->link)
+                        <a href="{{ $item->link }}">{{ $item->title }}</a>
                     @else
                         {{ $item->title }}
                     @endif
                 </div>
-                @if($item->excerpt)
-                    <div class="item-excerpt">{{ Str::limit($item->excerpt, 120) }}</div>
+                @if($item->description)
+                    <div class="item-excerpt">{{ Str::limit($item->description, 120) }}</div>
                 @endif
                 <div class="item-type">{{ ucfirst(str_replace('_', ' ', $item->type)) }}{!! $item->sector ? ' · ' . e($item->sector) : '' !!}</div>
             </div>
