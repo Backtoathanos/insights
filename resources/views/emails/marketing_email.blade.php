@@ -38,7 +38,7 @@
                 @php
                     $title = $article['title'] ?? 'Untitled';
                     $articleUrl = !empty($article['link']) ? $article['link'] : (rtrim($blogUrl, '/') . '/blog/' . ($article['slug'] ?? ''));
-                    $descText = !empty($article['description']) ? $article['description'] : $title;
+                    $descText = !empty($article['description']) ? strip_tags($article['description']) : $title;
                     $truncated = \Illuminate\Support\Str::limit($descText, 80);
                 @endphp
                 <div class="item">
