@@ -41,7 +41,7 @@ class InsightsReceiveController extends Controller
             'enquiry.phone' => ['nullable', 'string', 'max:255'],
             'enquiry.company' => ['nullable', 'string', 'max:255'],
             'enquiry.country' => ['nullable', 'string', 'max:10'],
-            'enquiry.interest' => ['nullable', 'string', 'max:255'],
+            'enquiry.interest' => ['nullable', 'string', 'max:5000'],
             'enquiry.message' => ['nullable', 'string'],
             'enquiry.page' => ['nullable', 'string', 'max:255'],
             'enquiry.type' => ['nullable', 'string', 'max:255'],
@@ -121,11 +121,16 @@ class InsightsReceiveController extends Controller
 
         // Auto-create newsletter preference for digest (if not exists)
         if (!NewsletterPreference::where('email', $email)->exists()) {
+            $sectors = config('newsletter.sectors');
+            if (!empty($enquiry['interest'])) {
+                $parsed = array_values(array_filter(array_map('trim', explode(',', (string) $enquiry['interest']))));
+                $sectors = !empty($parsed) ? $parsed : $sectors;
+            }
             NewsletterPreference::create([
                 'email' => $email,
                 'name' => $enquiry['name'] ?? null,
                 'frequency' => NewsletterPreference::FREQUENCY_WEEKLY,
-                'sectors' => $enquiry['interest'] ? [$enquiry['interest']] : config('newsletter.sectors'),
+                'sectors' => $sectors,
                 'token' => NewsletterPreference::generateToken(),
                 'subscriber_data_id' => null,
             ]);
