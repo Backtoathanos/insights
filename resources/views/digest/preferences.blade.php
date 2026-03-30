@@ -158,7 +158,7 @@
                         @foreach($sectors as $sector)
                             <label>
                                 <input type="checkbox" name="sectors[]" value="{{ $sector }}"
-                                    {{ in_array($sector, $preference->sectors ?? []) ? 'checked' : '' }}>
+                                    {{ in_array($sector, $selectedSectors ?? []) ? 'checked' : '' }}>
                                 {{ $sector }}
                             </label>
                         @endforeach

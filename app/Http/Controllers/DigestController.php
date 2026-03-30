@@ -2,6 +2,7 @@
 
 namespace Acelle\Http\Controllers;
 
+use Acelle\Library\NewsletterSectorNormalizer;
 use Acelle\Model\NewsletterPreference;
 use Acelle\Model\DigestSubscriber;
 use Acelle\Model\Subscriber;
@@ -122,6 +123,7 @@ class DigestController extends Controller
         return view('digest.preferences', [
             'preference' => $pref,
             'sectors' => config('newsletter.sectors', []),
+            'selectedSectors' => NewsletterSectorNormalizer::normalizeStoredSectors($pref->sectors),
             'useEmailUrl' => true,
         ]);
     }
@@ -141,12 +143,12 @@ class DigestController extends Controller
             $pref = NewsletterPreference::create([
                 'email' => $email,
                 'frequency' => $request->input('frequency', 'weekly'),
-                'sectors' => $request->input('sectors', []),
+                'sectors' => NewsletterSectorNormalizer::filterToAllowedSectors($request->input('sectors', [])),
                 'token' => NewsletterPreference::generateToken(),
             ]);
         } else {
             $pref->frequency = $request->input('frequency', 'weekly');
-            $pref->sectors = $request->input('sectors', []);
+            $pref->sectors = NewsletterSectorNormalizer::filterToAllowedSectors($request->input('sectors', []));
             $pref->save();
         }
         return redirect()->route('digest.preferences.email', ['email' => $email])
@@ -162,6 +164,7 @@ class DigestController extends Controller
         return view('digest.preferences', [
             'preference' => $pref,
             'sectors' => config('newsletter.sectors', []),
+            'selectedSectors' => NewsletterSectorNormalizer::normalizeStoredSectors($pref->sectors),
             'useEmailUrl' => false,
         ]);
     }
@@ -173,7 +176,7 @@ class DigestController extends Controller
             return redirect()->route('digest.not_found');
         }
         $pref->frequency = $request->input('frequency', 'weekly');
-        $pref->sectors = $request->input('sectors', []);
+        $pref->sectors = NewsletterSectorNormalizer::filterToAllowedSectors($request->input('sectors', []));
         $pref->save();
         return redirect()->route('digest.preferences', [
             'token' => $token,

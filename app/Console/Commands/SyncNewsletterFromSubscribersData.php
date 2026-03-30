@@ -2,6 +2,7 @@
 
 namespace Acelle\Console\Commands;
 
+use Acelle\Library\NewsletterSectorNormalizer;
 use Acelle\Model\SubscriberData;
 use Acelle\Model\NewsletterPreference;
 use Illuminate\Console\Command;
@@ -25,11 +26,17 @@ class SyncNewsletterFromSubscribersData extends Command
                 continue;
             }
             $row = SubscriberData::where('email', $email)->where('event', 'email_verified')->first();
+            $sectors = NewsletterSectorNormalizer::normalizeFromCommaSeparated(
+                $row->interest ? (string) $row->interest : null
+            );
+            if ($sectors === []) {
+                $sectors = config('newsletter.sectors');
+            }
             NewsletterPreference::create([
                 'email' => $email,
                 'name' => $row->name ?? null,
                 'frequency' => NewsletterPreference::FREQUENCY_WEEKLY,
-                'sectors' => $row->interest ? [$row->interest] : config('newsletter.sectors'),
+                'sectors' => $sectors,
                 'token' => NewsletterPreference::generateToken(),
                 'subscriber_data_id' => (string) $row->id,
             ]);

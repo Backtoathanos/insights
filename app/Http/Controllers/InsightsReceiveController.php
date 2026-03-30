@@ -2,6 +2,7 @@
 
 namespace Acelle\Http\Controllers;
 
+use Acelle\Library\NewsletterSectorNormalizer;
 use Acelle\Model\NewsletterPreference;
 use Acelle\Model\DigestSubscriber;
 use Acelle\Model\Subscriber;
@@ -42,6 +43,7 @@ class InsightsReceiveController extends Controller
             'enquiry.company' => ['nullable', 'string', 'max:255'],
             'enquiry.country' => ['nullable', 'string', 'max:10'],
             'enquiry.interest' => ['nullable', 'string', 'max:5000'],
+            'enquiry.cinterest' => ['nullable', 'string', 'max:5000'],
             'enquiry.message' => ['nullable', 'string'],
             'enquiry.page' => ['nullable', 'string', 'max:255'],
             'enquiry.type' => ['nullable', 'string', 'max:255'],
@@ -121,10 +123,16 @@ class InsightsReceiveController extends Controller
 
         // Auto-create newsletter preference for digest (if not exists)
         if (!NewsletterPreference::where('email', $email)->exists()) {
-            $sectors = config('newsletter.sectors');
+            $combined = '';
             if (!empty($enquiry['interest'])) {
-                $parsed = array_values(array_filter(array_map('trim', explode(',', (string) $enquiry['interest']))));
-                $sectors = !empty($parsed) ? $parsed : $sectors;
+                $combined .= (string) $enquiry['interest'];
+            }
+            if (!empty($enquiry['cinterest'])) {
+                $combined .= ($combined !== '' ? ',' : '') . (string) $enquiry['cinterest'];
+            }
+            $sectors = NewsletterSectorNormalizer::normalizeFromCommaSeparated($combined);
+            if ($sectors === []) {
+                $sectors = config('newsletter.sectors');
             }
             NewsletterPreference::create([
                 'email' => $email,
