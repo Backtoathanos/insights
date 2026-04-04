@@ -204,12 +204,12 @@ class DigestController extends Controller
      */
     protected function fetchMarketingArticles(?string $date = null): array
     {
-        $date = $date ?: now()->format('d-m-Y');
-        $apiUrl = config('newsletter.marketing.api_url');
-        $token = config('newsletter.marketing.api_token');
+        $date = trim((string) ($date ?: now()->format('d-m-Y')));
+        $apiUrl = rtrim((string) config('newsletter.marketing.api_url'), '/');
+        $token = (string) config('newsletter.marketing.api_token');
         $url = $apiUrl . '?token=' . urlencode($token) . '&date=' . urlencode($date);
 
-        $response = Http::timeout(30)->get($url);
+        $response = Http::timeout(45)->acceptJson()->get($url);
         if (!$response->successful()) {
             return [];
         }
@@ -249,7 +249,11 @@ class DigestController extends Controller
     }
 
     /**
-     * Filter categories by subscriber sectors. Returns only categories matching the sectors.
+     * Filter categories by subscriber sectors.
+     *
+     * The articles API tags each item with an "industry" field (e.g. Industrial). When present,
+     * we match that to the user's digest sectors (including blogs under latest_blogs). When
+     * "industry" is missing or not a known label, we fall back to the sector_to_category bucket map.
      */
     protected function filterCategoriesBySectors(array $categories, array $sectors): array
     {
@@ -258,23 +262,46 @@ class DigestController extends Controller
         }
 
         $mapping = config('newsletter.marketing.sector_to_category', []);
-        $allowedCategories = [];
+        $userCanonicals = [];
         foreach ($sectors as $sector) {
-            $cats = $mapping[$sector] ?? [];
-            $allowedCategories = array_merge($allowedCategories, $cats);
-        }
-        $allowedCategories = array_unique($allowedCategories);
-
-        if (empty($allowedCategories)) {
-            return $categories;
-        }
-
-        $filtered = [];
-        foreach ($categories as $key => $data) {
-            if (in_array($key, $allowedCategories, true)) {
-                $filtered[$key] = $data;
+            $c = NewsletterSectorNormalizer::canonicalSector(trim((string) $sector));
+            if ($c !== null) {
+                $userCanonicals[$c] = true;
             }
         }
+        $userSectorList = array_keys($userCanonicals);
+
+        $filtered = [];
+        foreach ($categories as $catKey => $data) {
+            $articles = $data['articles'] ?? [];
+            $filteredArticles = [];
+            foreach ($articles as $article) {
+                if (isset($article['industry']) && is_string($article['industry']) && trim($article['industry']) !== '') {
+                    $articleIndustry = NewsletterSectorNormalizer::canonicalSector(trim($article['industry']));
+                    if ($articleIndustry !== null) {
+                        if (in_array($articleIndustry, $userSectorList, true)) {
+                            $filteredArticles[] = $article;
+                        }
+                        continue;
+                    }
+                }
+                $allowedCategories = [];
+                foreach ($sectors as $sector) {
+                    $allowedCategories = array_merge($allowedCategories, $mapping[$sector] ?? []);
+                }
+                $allowedCategories = array_unique($allowedCategories);
+                if (empty($allowedCategories) || in_array($catKey, $allowedCategories, true)) {
+                    $filteredArticles[] = $article;
+                }
+            }
+            if (!empty($filteredArticles)) {
+                $filtered[$catKey] = [
+                    'label' => $data['label'] ?? $catKey,
+                    'articles' => $filteredArticles,
+                ];
+            }
+        }
+
         return $filtered;
     }
 
