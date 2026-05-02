@@ -48,7 +48,8 @@ Route::get('digest/preferences/{token}', 'DigestController@preferences')->name('
 Route::post('digest/preferences/{token}', 'DigestController@savePreferences')->name('digest.save_preferences');
 Route::get('digest/show-more', 'DigestController@showMore')->name('digest.show_more');
 Route::get('digest/not-found', function () { return view('digest.not_found'); })->name('digest.not_found');
-// Marketing email - cronjob endpoint (hit daily to send to all subscribers)
+// Marketing email — cron hits daily; recipients come from newsletter_preferences (subscribed + on digest list).
+// frequency=daily: sent each run. frequency=weekly: sent only on MARKETING_MAIL_WEEKLY_DAY. Prefer `php artisan marketing:send`.
 Route::get('digest/marketingmail', 'DigestController@marketingMail')->name('digest.marketing_mail');
 // Marketing email test - form to send to a single email for testing
 Route::get('digest/marketingmailcheck', 'DigestController@marketingMailCheckForm')->name('digest.marketing_mail_check');

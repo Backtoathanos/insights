@@ -316,56 +316,119 @@ class DigestController extends Controller
     }
 
     /**
-     * Cronjob endpoint: /digest/marketingmail
-     * Fetches articles from API, sends marketing email to all brsubscribers.
-     * If no categories have data, no email is sent.
+     * Marketing mail batch: subscribed rows in newsletter_preferences on the digest list,
+     * respecting frequency (daily = every run; weekly = one weekday via config).
+     *
+     * @return array{sent: bool, message?: string, count?: int, categories?: array, eligible_preferences?: int, skipped_frequency?: int, error?: string}
      */
-    public function marketingMail(Request $request)
+    public function executeMarketingMail(?string $date = null): array
     {
-        $date = $request->query('date'); // optional: DD-MM-YYYY
         $categories = $this->fetchMarketingArticles($date);
 
         if (empty($categories)) {
-            return response()->json([
+            return [
                 'sent' => false,
                 'message' => 'No article data available for any category. Email not sent.',
-            ], 200);
+                'count' => 0,
+            ];
         }
 
         $digestMailListId = config('newsletter.digest.mail_list_id') ?: env('NEWSLETTER_DIGEST_MAIL_LIST_ID');
         $list = ($digestMailListId ? MailList::find($digestMailListId) : null) ?: MailList::first();
         if (!$list) {
-            return response()->json([
+            return [
                 'sent' => false,
                 'error' => 'No mail list configured. Set NEWSLETTER_DIGEST_MAIL_LIST_ID.',
-            ], 500);
+                'count' => 0,
+            ];
         }
 
-        $subscribers = DB::table('subscribers')
+        $subscriberEmails = DB::table('subscribers')
             ->where('mail_list_id', $list->id)
             ->where('status', Subscriber::STATUS_SUBSCRIBED)
-            ->pluck('email');
+            ->pluck('email')
+            ->all();
+
+        if ($subscriberEmails === []) {
+            return [
+                'sent' => true,
+                'count' => 0,
+                'message' => 'No subscribers on the digest mail list.',
+                'categories' => array_keys($categories),
+                'eligible_preferences' => 0,
+                'skipped_frequency' => 0,
+            ];
+        }
+
+        $preferences = NewsletterPreference::subscribed()
+            ->whereIn('email', $subscriberEmails)
+            ->get();
 
         $sent = 0;
-        foreach ($subscribers as $email) {
+        $skippedFrequency = 0;
+        foreach ($preferences as $pref) {
+            if (!$pref->shouldReceiveMarketingMailToday()) {
+                $skippedFrequency++;
+                continue;
+            }
             try {
-                $sectors = $this->getSectorsForEmail($email);
+                $sectors = $this->getSectorsForEmail($pref->email);
                 $filtered = $this->filterCategoriesBySectors($categories, $sectors);
                 if (empty($filtered)) {
                     continue;
                 }
-                Mail::to($email)->send(new MarketingEmailMail($filtered, $email));
+                Mail::to($pref->email)->send(new MarketingEmailMail($filtered, $pref->email));
                 $sent++;
             } catch (\Throwable $e) {
                 // Log but continue
             }
         }
 
-        return response()->json([
+        return [
             'sent' => true,
             'count' => $sent,
             'categories' => array_keys($categories),
-        ], 200);
+            'eligible_preferences' => $preferences->count(),
+            'skipped_frequency' => $skippedFrequency,
+        ];
+    }
+
+    /**
+     * Cronjob endpoint: /digest/marketingmail
+     * Same logic as `php artisan marketing:send`. Sends only to subscribed newsletter_preferences
+     * rows whose email is on the digest mail list; daily vs weekly uses frequency column.
+     */
+    public function marketingMail(Request $request)
+    {
+        $date = $request->query('date'); // optional: DD-MM-YYYY
+        $result = $this->executeMarketingMail($date !== null ? (string) $date : null);
+
+        if (!empty($result['error'])) {
+            return response()->json([
+                'sent' => false,
+                'error' => $result['error'],
+            ], 500);
+        }
+
+        if (!empty($result['message']) && empty($result['sent'])) {
+            return response()->json([
+                'sent' => false,
+                'message' => $result['message'],
+            ], 200);
+        }
+
+        $payload = [
+            'sent' => true,
+            'count' => $result['count'],
+            'categories' => $result['categories'] ?? [],
+            'eligible_preferences' => $result['eligible_preferences'] ?? 0,
+            'skipped_frequency' => $result['skipped_frequency'] ?? 0,
+        ];
+        if (!empty($result['message'])) {
+            $payload['message'] = $result['message'];
+        }
+
+        return response()->json($payload, 200);
     }
 
     /**

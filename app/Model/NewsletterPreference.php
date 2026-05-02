@@ -77,4 +77,46 @@ class NewsletterPreference extends Model
         }
         return $query->where('frequency', self::FREQUENCY_WEEKLY);
     }
+
+    /**
+     * Marketing mail should run for this row when the daily cron fires once per day.
+     * Daily frequency: every run. Weekly frequency: only on {@see resolveMarketingWeeklySendDay()}.
+     */
+    public function shouldReceiveMarketingMailToday(): bool
+    {
+        if (!$this->isSubscribed()) {
+            return false;
+        }
+        $freq = $this->frequency ?: self::FREQUENCY_WEEKLY;
+        if ($freq === self::FREQUENCY_DAILY) {
+            return true;
+        }
+        $target = self::resolveMarketingWeeklySendDay();
+        $today = (int) now()->format('w');
+
+        return $today === $target;
+    }
+
+    /**
+     * Config newsletter.marketing.weekly_send_day: 0–6 (PHP date('w'), Sun=0) or weekday name (e.g. sunday, thursday).
+     */
+    public static function resolveMarketingWeeklySendDay(): int
+    {
+        $v = config('newsletter.marketing.weekly_send_day', 'sunday');
+        if (is_numeric($v)) {
+            return ((int) $v) % 7;
+        }
+        $map = [
+            'sun' => 0, 'sunday' => 0,
+            'mon' => 1, 'monday' => 1,
+            'tue' => 2, 'tues' => 2, 'tuesday' => 2,
+            'wed' => 3, 'weds' => 3, 'wednesday' => 3,
+            'thu' => 4, 'thur' => 4, 'thurs' => 4, 'thursday' => 4,
+            'fri' => 5, 'friday' => 5,
+            'sat' => 6, 'saturday' => 6,
+        ];
+        $k = strtolower(trim((string) $v));
+
+        return $map[$k] ?? 0;
+    }
 }

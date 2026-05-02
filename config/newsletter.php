@@ -33,6 +33,10 @@ return [
         'api_url' => env('MARKETING_ARTICLES_API_URL', 'https://adminapi.blackridgeresearch.com/articles/sections'),
         'api_token' => env('MARKETING_ARTICLES_API_TOKEN', 'secret-token'),
         'blog_url' => env('MARKETING_BLOG_URL', 'https://www.blackridgeresearch.com/'),
+        // date('w'): 0=Sunday … 6=Saturday. Names: sunday, thursday, etc. Used when newsletter_preferences.frequency = weekly.
+        'weekly_send_day' => env('MARKETING_MAIL_WEEKLY_DAY', 'sunday'),
+        // Laravel scheduler time for `php artisan marketing:send` (digest/marketing mail cron).
+        'send_at' => env('MARKETING_MAIL_SEND_AT', '08:00'),
         'categories' => [
             'latest_blogs' => 'Latest Blogs',
             'project_profiles' => 'Project Profiles',
