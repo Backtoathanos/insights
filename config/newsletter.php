@@ -30,7 +30,7 @@ return [
     ],
 
     'marketing' => [
-        'api_url' => env('MARKETING_ARTICLES_API_URL', 'https://staging-api.blackridgeresearch.com/articles/sections'),
+        'api_url' => env('MARKETING_ARTICLES_API_URL', 'https://adminapi.blackridgeresearch.com/articles/sections'),
         'api_token' => env('MARKETING_ARTICLES_API_TOKEN', 'secret-token'),
         'blog_url' => env('MARKETING_BLOG_URL', 'https://www.blackridgeresearch.com/'),
         'categories' => [
