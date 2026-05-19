@@ -43,6 +43,9 @@ return [
             'project_news' => 'Project News',
             'industry_news' => 'Industry News',
         ],
+        // Append to outbound article / “Show more” URLs (Blackridge filters), DD-MM-YYYY for date key.
+        'link_query_sector' => env('MARKETING_LINK_QUERY_SECTOR', 'sector'),
+        'link_query_date' => env('MARKETING_LINK_QUERY_DATE', 'date'),
         // Map user sectors to API categories for filtering. "All" = all categories.
         'sector_to_category' => [
             'Oil & Gas' => ['industry_news', 'project_news'],

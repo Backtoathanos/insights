@@ -29,6 +29,18 @@
     </style>
 </head>
 <body>
+    @php
+        $subscriberSectorsCsv = implode(',', array_map('trim', $linkSubscriberSectors ?? []));
+        $campaignDateDmY = $linkFilterDateDmY ?? null;
+        $showMoreBase = rtrim($blogUrl, '/') . '/';
+        $showMoreUrl = \Acelle\Library\MarketingLinkQuery::append(
+            $showMoreBase,
+            $subscriberSectorsCsv,
+            $campaignDateDmY,
+            $linkQuerySector,
+            $linkQueryDate
+        );
+    @endphp
     <div class="wrapper">
         <h1>Top stories for latest blogs</h1>
 
@@ -40,13 +52,33 @@
                     $articleUrl = !empty($article['link']) ? $article['link'] : (rtrim($blogUrl, '/') . '/blog/' . ($article['slug'] ?? ''));
                     $descText = !empty($article['description']) ? strip_tags($article['description']) : $title;
                     $truncated = \Illuminate\Support\Str::limit($descText, 80);
+                    $industry = isset($article['industry']) ? trim((string) $article['industry']) : '';
+                    $sectorForQuery = $industry !== '' ? $industry : $subscriberSectorsCsv;
+                    $dateDmY = null;
+                    if (!empty($article['published_at'])) {
+                        try {
+                            $dateDmY = \Carbon\Carbon::parse($article['published_at'])->format('d-m-Y');
+                        } catch (\Throwable $e) {
+                            $dateDmY = null;
+                        }
+                    }
+                    if (($dateDmY === null || $dateDmY === '') && !empty($campaignDateDmY)) {
+                        $dateDmY = $campaignDateDmY;
+                    }
+                    $articleUrlWithFilters = \Acelle\Library\MarketingLinkQuery::append(
+                        $articleUrl,
+                        $sectorForQuery,
+                        $dateDmY,
+                        $linkQuerySector,
+                        $linkQueryDate
+                    );
                 @endphp
                 <div class="item">
                     <table class="item-table">
                         <tr>
                             <td class="item-image">
                                 @if(!empty($article['image']))
-                                    <a href="{{ $articleUrl }}"><img src="{{ $article['image'] }}" alt="" width="80" height="60"></a>
+                                    <a href="{{ $articleUrlWithFilters }}"><img src="{{ $article['image'] }}" alt="" width="80" height="60"></a>
                                 @else
                                     &nbsp;
                                 @endif
@@ -55,7 +87,7 @@
                                 <div class="item-title">{{ $title }}</div>
                                 <div class="item-date">{{ isset($article['published_at']) ? \Carbon\Carbon::parse($article['published_at'])->format('F j, Y') : '' }}</div>
                                 <div class="item-desc">
-                                    {{ $truncated }}....<a href="{{ $articleUrl }}" class="view-more">View more</a>
+                                    {{ $truncated }}....<a href="{{ $articleUrlWithFilters }}" class="view-more">View more</a>
                                 </div>
                             </td>
                         </tr>
@@ -65,7 +97,7 @@
         @endforeach
 
         <div class="show-more-wrap">
-            <a href="{{ $blogUrl }}" class="btn-show-more">Show more</a>
+            <a href="{{ $showMoreUrl }}" class="btn-show-more">Show more</a>
         </div>
 
         @if($recipientEmail)

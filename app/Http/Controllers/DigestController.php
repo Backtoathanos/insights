@@ -8,6 +8,7 @@ use Acelle\Model\DigestSubscriber;
 use Acelle\Model\Subscriber;
 use Acelle\Model\MailList;
 use Acelle\Model\DigestContentItem;
+use Acelle\Model\MarketingMailSendLog;
 use Acelle\Mail\MarketingEmailMail;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -452,6 +453,77 @@ class DigestController extends Controller
     }
 
     /**
+     * Sectors for outbound ?sector= URLs (exclude "All", trimmed, stable unique order).
+     *
+     * @param  array<int|string, mixed>  $sectors
+     * @return array<int, string>
+     */
+    protected function sectorsForOutboundLinks(array $sectors): array
+    {
+        $out = [];
+        foreach ($sectors as $s) {
+            $s = trim((string) $s);
+            if ($s === '' || strcasecmp($s, 'All') === 0) {
+                continue;
+            }
+            $out[$s] = true;
+        }
+
+        return array_keys($out);
+    }
+
+    /**
+     * Collect numeric article IDs from grouped marketing categories.
+     *
+     * @param  array<string, array{label?: string, articles?: array<int, array<string, mixed>>}>  $categories
+     * @return array<int>
+     */
+    protected function extractMarketingContentIds(array $categories): array
+    {
+        $ids = [];
+        foreach ($categories as $data) {
+            foreach (($data['articles'] ?? []) as $article) {
+                if (!is_array($article)) {
+                    continue;
+                }
+                if (array_key_exists('id', $article) && is_numeric($article['id'])) {
+                    $ids[] = (int) $article['id'];
+                }
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * Persist marketing send outcome (never throws).
+     */
+    protected function logMarketingMailSend(
+        string $email,
+        array $categoriesForIds,
+        ?string $contentDateDmY,
+        string $batchFrequency,
+        int $status,
+        string $source = MarketingMailSendLog::SOURCE_CRON,
+        ?string $errorMessage = null
+    ): void {
+        try {
+            MarketingMailSendLog::create([
+                'email' => $email,
+                'content_ids' => $this->extractMarketingContentIds($categoriesForIds) ?: null,
+                'sent_at' => Carbon::now(),
+                'content_date' => $contentDateDmY,
+                'batch_frequency' => $batchFrequency,
+                'batch_source' => $source,
+                'status' => $status,
+                'error_message' => $errorMessage,
+            ]);
+        } catch (\Throwable $e) {
+            // Logging must never break mailing
+        }
+    }
+
+    /**
      * Marketing mail batch: subscribed newsletter_preferences on the digest list.
      * Daily batch: API date = yesterday (unless date override); recipients with frequency=daily only.
      * Weekly batch: up to 5 API calls backward until all sections populated (or merged); recipients frequency=weekly only;
@@ -524,18 +596,54 @@ class DigestController extends Controller
             ->where('frequency', $batchFrequency)
             ->get();
 
+        $linkFilterDateDmY = $dateOverride !== null && trim((string) $dateOverride) !== ''
+            ? trim((string) $dateOverride)
+            : Carbon::now()->subDay()->format('d-m-Y');
+
         $sent = 0;
         foreach ($preferences as $pref) {
+            $filtered = [];
             try {
                 $sectors = $this->getSectorsForEmail($pref->email);
                 $filtered = $this->filterCategoriesBySectors($categories, $sectors);
                 if ($filtered === []) {
+                    $this->logMarketingMailSend(
+                        $pref->email,
+                        [],
+                        $linkFilterDateDmY,
+                        $batchFrequency,
+                        MarketingMailSendLog::STATUS_NOT_SENT,
+                        MarketingMailSendLog::SOURCE_CRON,
+                        'No articles after sector filter'
+                    );
+
                     continue;
                 }
-                Mail::to($pref->email)->send(new MarketingEmailMail($filtered, $pref->email));
+                Mail::to($pref->email)->send(new MarketingEmailMail(
+                    $filtered,
+                    $pref->email,
+                    $linkFilterDateDmY,
+                    $this->sectorsForOutboundLinks($sectors),
+                ));
+                $this->logMarketingMailSend(
+                    $pref->email,
+                    $filtered,
+                    $linkFilterDateDmY,
+                    $batchFrequency,
+                    MarketingMailSendLog::STATUS_SENT,
+                    MarketingMailSendLog::SOURCE_CRON
+                );
                 $sent++;
             } catch (\Throwable $e) {
-                // Log but continue
+                $this->logMarketingMailSend(
+                    $pref->email,
+                    $filtered,
+                    $linkFilterDateDmY,
+                    $batchFrequency,
+                    MarketingMailSendLog::STATUS_NOT_SENT,
+                    MarketingMailSendLog::SOURCE_CRON,
+                    substr($e->getMessage(), 0, 2000)
+                );
             }
         }
 
@@ -630,17 +738,51 @@ class DigestController extends Controller
                 ->with('error', 'No article data available for any category. Email not sent.');
         }
 
+        $linkFilterDateDmY = $date ?? Carbon::now()->subDay()->format('d-m-Y');
+        $filtered = [];
         try {
             $sectors = $this->getSectorsForEmail($request->email);
             $filtered = $this->filterCategoriesBySectors($categories, $sectors);
             if (empty($filtered)) {
+                $this->logMarketingMailSend(
+                    $request->email,
+                    [],
+                    $linkFilterDateDmY,
+                    $frequency,
+                    MarketingMailSendLog::STATUS_NOT_SENT,
+                    MarketingMailSendLog::SOURCE_TEST,
+                    'No articles after sector filter'
+                );
+
                 return redirect()->route('digest.marketing_mail_check')
                     ->with('error', 'No articles match your sector preferences. Save preferences at Change preference first.');
             }
-            Mail::to($request->email)->send(new MarketingEmailMail($filtered, $request->email));
+            Mail::to($request->email)->send(new MarketingEmailMail(
+                $filtered,
+                $request->email,
+                $linkFilterDateDmY,
+                $this->sectorsForOutboundLinks($sectors),
+            ));
+            $this->logMarketingMailSend(
+                $request->email,
+                $filtered,
+                $linkFilterDateDmY,
+                $frequency,
+                MarketingMailSendLog::STATUS_SENT,
+                MarketingMailSendLog::SOURCE_TEST
+            );
             return redirect()->route('digest.marketing_mail_check')
                 ->with('success', 'Test marketing email sent to ' . $request->email);
         } catch (\Throwable $e) {
+            $this->logMarketingMailSend(
+                $request->email,
+                $filtered,
+                $linkFilterDateDmY,
+                $frequency,
+                MarketingMailSendLog::STATUS_NOT_SENT,
+                MarketingMailSendLog::SOURCE_TEST,
+                substr($e->getMessage(), 0, 2000)
+            );
             return redirect()->route('digest.marketing_mail_check')
                 ->with('error', 'Failed to send: ' . $e->getMessage());
         }
