@@ -147,8 +147,8 @@
                 <div class="form-group">
                     <label>Frequency</label>
                     <select name="frequency">
-                        <option value="daily" {{ $preference->frequency === 'daily' ? 'selected' : '' }}>Daily</option>
-                        <option value="weekly" {{ $preference->frequency === 'weekly' ? 'selected' : '' }}>Weekly</option>
+                        <option value="daily" {{ ($preference->frequency ?? 'daily') === 'daily' ? 'selected' : '' }}>Daily</option>
+                        <option value="weekly" {{ ($preference->frequency ?? '') === 'weekly' ? 'selected' : '' }}>Weekly</option>
                     </select>
                 </div>
 

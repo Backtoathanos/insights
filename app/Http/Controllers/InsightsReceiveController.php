@@ -137,7 +137,7 @@ class InsightsReceiveController extends Controller
             NewsletterPreference::create([
                 'email' => $email,
                 'name' => $enquiry['name'] ?? null,
-                'frequency' => NewsletterPreference::FREQUENCY_WEEKLY,
+                'frequency' => NewsletterPreference::FREQUENCY_DAILY,
                 'sectors' => $sectors,
                 'token' => NewsletterPreference::generateToken(),
                 'subscriber_data_id' => null,

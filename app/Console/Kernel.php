@@ -95,10 +95,11 @@ class Kernel extends ConsoleKernel
         // Newsletter digest: weekly on Monday at 08:00
         $schedule->command('newsletter:send-digest --frequency=weekly')->weeklyOn(1, '08:00');
 
-        // Marketing articles email: same schedule daily; sends to newsletter_preferences with frequency=daily every day,
-        // and frequency=weekly only on MARKETING_MAIL_WEEKLY_DAY (see config/newsletter.php).
-        $marketingAt = config('newsletter.marketing.send_at', '08:00');
-        $schedule->command('marketing:send')->dailyAt($marketingAt)->name('marketing:send');
+        // Marketing articles email: daily batch uses yesterday's API date; weekly batch uses multi-day lookup on MARKETING_MAIL_WEEKLY_DAY (default Sunday).
+        $marketingAt = config('newsletter.marketing.send_at', '09:00');
+        $schedule->command('marketing:send --frequency=daily')->dailyAt($marketingAt)->name('marketing:send-daily');
+        $weeklyDow = \Acelle\Model\NewsletterPreference::resolveMarketingWeeklySendDay();
+        $schedule->command('marketing:send --frequency=weekly')->weeklyOn($weeklyDow, $marketingAt)->name('marketing:send-weekly');
 
         $licenseTask = $schedule->call(function () {
             Notification::recordIfFails(

@@ -139,14 +139,21 @@
                     @enderror
                 </div>
                 <div class="form-group">
-                    <label for="date">Date (optional, DD-MM-YYYY)</label>
-                    <input type="text" id="date" name="date" value="{{ old('date', now()->format('d-m-Y')) }}" placeholder="06-02-2026">
+                    <label for="frequency">Batch type</label>
+                    <select id="frequency" name="frequency" style="width:100%;padding:12px 16px;border:1px solid var(--br-border);border-radius:var(--br-radius);font-size:1rem;font-family:inherit;">
+                        <option value="daily" {{ old('frequency', 'daily') === 'daily' ? 'selected' : '' }}>Daily (single API date)</option>
+                        <option value="weekly" {{ old('frequency') === 'weekly' ? 'selected' : '' }}>Weekly (up to 5 API dates backward)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="date">Date override (optional, DD-MM-YYYY)</label>
+                    <input type="text" id="date" name="date" value="{{ old('date') }}" placeholder="Leave empty: daily uses yesterday">
                 </div>
                 <button type="submit" class="btn btn-primary">Send test email</button>
             </form>
 
             <p class="footer-note">
-                Uses the same content as the daily marketing mail (from articles API).
+                Matches cron behaviour: daily uses yesterday unless you set a date; weekly merges up to five prior days until all sections have content.
             </p>
         </div>
     </div>

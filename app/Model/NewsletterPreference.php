@@ -87,7 +87,7 @@ class NewsletterPreference extends Model
         if (!$this->isSubscribed()) {
             return false;
         }
-        $freq = $this->frequency ?: self::FREQUENCY_WEEKLY;
+        $freq = $this->frequency ?: self::FREQUENCY_DAILY;
         if ($freq === self::FREQUENCY_DAILY) {
             return true;
         }
