@@ -22,6 +22,10 @@ class SendMarketingMail extends Command
             ? NewsletterPreference::FREQUENCY_WEEKLY
             : NewsletterPreference::FREQUENCY_DAILY;
 
+        if (function_exists('set_time_limit')) {
+            set_time_limit(0);
+        }
+
         $date = $this->option('date');
         $date = $date !== null && $date !== '' ? (string) $date : null;
 

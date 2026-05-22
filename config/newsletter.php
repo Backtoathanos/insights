@@ -37,6 +37,7 @@ return [
         'weekly_send_day' => env('MARKETING_MAIL_WEEKLY_DAY', 'sunday'),
         // Laravel scheduler time for `php artisan marketing:send` (daily + weekly digest/marketing mail cron).
         'send_at' => env('MARKETING_MAIL_SEND_AT', '09:00'),
+        'http_cron_key' => env('MARKETING_MAIL_HTTP_CRON_KEY', ''),
         'categories' => [
             'latest_blogs' => 'Latest Blogs',
             'project_profiles' => 'Project Profiles',

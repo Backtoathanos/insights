@@ -45,6 +45,10 @@ class Kernel extends HttpKernel
             #\Acelle\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
+        // Public digest HTTP crons (GET only) — no session / CSRF / cookies.
+        'digest_cron' => [
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        ],
         'api' => [
             'throttle:1000,1',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,

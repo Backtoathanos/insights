@@ -8,12 +8,17 @@ use Acelle\Model\NewsletterPreference;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class MarketingDigestSubscriberController extends Controller
 {
     public function index(Request $request)
     {
         $keyword = trim((string) $request->query('keyword', ''));
+        $perPage = (int) $request->query('per_page', 50);
+        if (!in_array($perPage, [25, 50, 100], true)) {
+            $perPage = 50;
+        }
 
         $query = NewsletterPreference::query()->orderByDesc('id');
 
@@ -24,7 +29,7 @@ class MarketingDigestSubscriberController extends Controller
             });
         }
 
-        $preferences = $query->paginate(50)->appends($request->query());
+        $preferences = $query->paginate($perPage)->appends($request->query());
 
         return view('admin.marketing_digest_subscribers.index', [
             'preferences' => $preferences,
@@ -39,8 +44,21 @@ class MarketingDigestSubscriberController extends Controller
         $admin = Auth::user()->admin;
         $timezone = $admin->getTimezone();
 
+        $emailKey = self::normalizeEmailForLogLookup($preference->email);
+        if ($emailKey === '') {
+            return response()->json([
+                'email' => $preference->email,
+                'logs' => [],
+            ]);
+        }
+
+        $driver = DB::connection()->getDriverName();
+        $normalizedEmailSql = ($driver === 'pgsql')
+            ? 'LOWER(TRIM(BOTH FROM email))'
+            : 'LOWER(TRIM(email))';
+
         $logs = MarketingMailSendLog::query()
-            ->where('email', $preference->email)
+            ->whereRaw("{$normalizedEmailSql} = ?", [$emailKey])
             ->orderByDesc('sent_at')
             ->orderByDesc('id')
             ->limit(500)
@@ -51,7 +69,7 @@ class MarketingDigestSubscriberController extends Controller
                 ? $log->sent_at->copy()->timezone($timezone)
                 : null;
 
-            $ids = is_array($log->content_ids) ? $log->content_ids : [];
+            $ids = self::contentIdsFromLog($log);
             $name = $ids === []
                 ? '—'
                 : implode(', ', array_slice($ids, 0, 15)) . (count($ids) > 15 ? '…' : '');
@@ -84,5 +102,28 @@ class MarketingDigestSubscriberController extends Controller
             'email' => $preference->email,
             'logs' => $payload,
         ]);
+    }
+
+    private static function normalizeEmailForLogLookup(?string $email): string
+    {
+        return strtolower(trim((string) $email));
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private static function contentIdsFromLog(MarketingMailSendLog $log): array
+    {
+        $attrs = $log->getAttributes();
+        $raw = $attrs['content_ids'] ?? null;
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        $cast = $log->content_ids;
+
+        return is_array($cast) ? $cast : [];
     }
 }

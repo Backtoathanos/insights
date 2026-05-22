@@ -97,9 +97,9 @@ class Kernel extends ConsoleKernel
 
         // Marketing articles email: daily batch uses yesterday's API date; weekly batch uses multi-day lookup on MARKETING_MAIL_WEEKLY_DAY (default Sunday).
         $marketingAt = config('newsletter.marketing.send_at', '09:00');
-        $schedule->command('marketing:send --frequency=daily')->dailyAt($marketingAt)->name('marketing:send-daily');
+        $schedule->command('marketing:send --frequency=daily')->dailyAt($marketingAt)->name('marketing:send-daily')->withoutOverlapping(120);
         $weeklyDow = \Acelle\Model\NewsletterPreference::resolveMarketingWeeklySendDay();
-        $schedule->command('marketing:send --frequency=weekly')->weeklyOn($weeklyDow, $marketingAt)->name('marketing:send-weekly');
+        $schedule->command('marketing:send --frequency=weekly')->weeklyOn($weeklyDow, $marketingAt)->name('marketing:send-weekly')->withoutOverlapping(240);
 
         $licenseTask = $schedule->call(function () {
             Notification::recordIfFails(

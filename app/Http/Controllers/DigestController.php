@@ -509,7 +509,7 @@ class DigestController extends Controller
     ): void {
         try {
             MarketingMailSendLog::create([
-                'email' => $email,
+                'email' => strtolower(trim($email)),
                 'content_ids' => $this->extractMarketingContentIds($categoriesForIds) ?: null,
                 'sent_at' => Carbon::now(),
                 'content_date' => $contentDateDmY,
@@ -663,6 +663,21 @@ class DigestController extends Controller
      */
     public function marketingMail(Request $request)
     {
+        $expectedKey = config('newsletter.marketing.http_cron_key');
+        if ($expectedKey !== null && $expectedKey !== '') {
+            if (!hash_equals((string) $expectedKey, (string) $request->query('key', ''))) {
+                return response()->json([
+                    'sent' => false,
+                    'error' => 'Invalid or missing key. Set MARKETING_MAIL_HTTP_CRON_KEY and pass ?key=...',
+                ], 403);
+            }
+        }
+
+        if (function_exists('set_time_limit')) {
+            set_time_limit(0);
+        }
+        ignore_user_abort(true);
+
         $frequency = $request->query('frequency', NewsletterPreference::FREQUENCY_DAILY);
         $frequency = $frequency === NewsletterPreference::FREQUENCY_WEEKLY
             ? NewsletterPreference::FREQUENCY_WEEKLY

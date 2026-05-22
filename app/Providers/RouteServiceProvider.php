@@ -43,6 +43,11 @@ class RouteServiceProvider extends ServiceProvider
                 ->namespace($this->namespace)
                 ->group(base_path('routes/api.php'));
 
+            // Stateless GET crons (no session) — avoids session locks / lighter stack than `web`.
+            Route::middleware('digest_cron')
+                ->namespace($this->namespace)
+                ->group(base_path('routes/digest_cron.php'));
+
             Route::middleware('web')
                 ->namespace($this->namespace)
                 ->group(base_path('routes/web.php'));

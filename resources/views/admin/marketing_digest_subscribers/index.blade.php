@@ -24,6 +24,14 @@
                 <span class="material-symbols-rounded">search</span>
             </span>
             <button type="submit" class="btn btn-secondary ms-2">{{ trans('messages.submit') }}</button>
+            <span class="ms-3 d-inline-flex align-items-center">
+                <label class="me-2 mb-0 small text-muted">{{ trans('messages.num_per_page') }}</label>
+                <select class="form-select form-select-sm" name="per_page" style="width: auto;" onchange="this.form.submit()">
+                    @foreach ([25, 50, 100] as $n)
+                        <option value="{{ $n }}"{{ (int) request('per_page', 50) === $n ? ' selected' : '' }}>{{ $n }}</option>
+                    @endforeach
+                </select>
+            </span>
         </div>
     </form>
 
@@ -32,7 +40,7 @@
             <table class="table table-box pml-table mt-2">
                 <thead>
                     <tr>
-                        <th>{{ trans('messages.marketing_digest.col_row_id') }}</th>
+                        <th>{{ trans('messages.marketing_digest.col_row_no') }}</th>
                         <th>{{ trans('messages.name') }}</th>
                         <th>{{ trans('messages.email') }}</th>
                         <th>{{ trans('messages.marketing_digest.frequency') }}</th>
@@ -50,7 +58,7 @@
                                 : implode(', ', $sectors);
                         @endphp
                         <tr>
-                            <td class="text-nowrap">{{ $pref->id }}</td>
+                            <td class="text-nowrap">{{ $preferences->firstItem() + $loop->index }}</td>
                             <td>{{ $pref->name ?: '—' }}</td>
                             <td>{{ $pref->email }}</td>
                             <td class="text-nowrap">{{ $pref->frequency === \Acelle\Model\NewsletterPreference::FREQUENCY_WEEKLY ? trans('messages.marketing_digest.frequency_weekly') : trans('messages.marketing_digest.frequency_daily') }}</td>

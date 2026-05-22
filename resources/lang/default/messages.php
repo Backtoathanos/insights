@@ -3212,7 +3212,7 @@
   'year.choice' => 'year|years',
   'marketing_digest.col_date' => 'Date',
   'marketing_digest.col_name' => 'Articles (IDs)',
-  'marketing_digest.col_row_id' => 'ID',
+  'marketing_digest.col_row_no' => 'No.',
   'marketing_digest.col_status' => 'Status',
   'marketing_digest.col_time' => 'Time',
   'marketing_digest.content_type_unknown' => 'Marketing digest',
