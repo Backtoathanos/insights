@@ -937,6 +937,10 @@ Route::group(['namespace' => 'Admin', 'middleware' => ['not_installed', 'auth', 
     Route::get('admin/notifications/listing', 'NotificationController@listing');
     Route::get('admin/notifications', 'NotificationController@index');
 
+    // Marketing digest (newsletter preferences + send logs)
+    Route::get('admin/marketing_digest_subscribers/{preference}/send_logs', 'MarketingDigestSubscriberController@sendLogs');
+    Route::get('admin/marketing_digest_subscribers', 'MarketingDigestSubscriberController@index');
+
     // User
     Route::get('admin/users/switch/{uid}', 'UserController@switch_user');
     Route::get('admin/users/listing/{page?}', 'UserController@listing');
