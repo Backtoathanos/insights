@@ -17,7 +17,28 @@
 @endsection
 
 @section('content')
+    @php
+        /** @var string $sort */
+        /** @var string $sort_direction */
+        $marketingDigestSortHref = function (string $column) use ($sort, $sort_direction): string {
+            if ($sort === $column && $sort_direction === 'asc') {
+                $nextDir = 'desc';
+            } elseif ($sort === $column) {
+                $nextDir = 'asc';
+            } else {
+                $nextDir = in_array($column, ['name', 'email', 'frequency', 'sectors'], true) ? 'asc' : 'desc';
+            }
+
+            return request()->fullUrlWithQuery([
+                'sort' => $column,
+                'direction' => $nextDir,
+                'page' => 1,
+            ]);
+        };
+    @endphp
     <form method="get" action="{{ action('Admin\MarketingDigestSubscriberController@index') }}" class="mb-3">
+        <input type="hidden" name="sort" value="{{ $sort }}" />
+        <input type="hidden" name="direction" value="{{ $sort_direction }}" />
         <div class="filter-box d-inline-flex align-items-center">
             <span class="text-nowrap">
                 <input type="text" name="keyword" class="form-control search" value="{{ request('keyword') }}" placeholder="{{ trans('messages.type_to_search') }}" />
@@ -40,12 +61,24 @@
             <table class="table table-box pml-table mt-2">
                 <thead>
                     <tr>
-                        <th>{{ trans('messages.marketing_digest.col_row_no') }}</th>
-                        <th>{{ trans('messages.name') }}</th>
-                        <th>{{ trans('messages.email') }}</th>
-                        <th>{{ trans('messages.marketing_digest.frequency') }}</th>
-                        <th>{{ trans('messages.marketing_digest.sectors') }}</th>
-                        <th>{{ trans('messages.marketing_digest.subscription_status') }}</th>
+                        <th class="text-nowrap">
+                            <a href="{{ $marketingDigestSortHref('id') }}" class="text-reset text-semibold">{{ trans('messages.marketing_digest.col_row_no') }}@if ($sort === 'id') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
+                        </th>
+                        <th class="text-nowrap">
+                            <a href="{{ $marketingDigestSortHref('name') }}" class="text-reset text-semibold">{{ trans('messages.name') }}@if ($sort === 'name') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
+                        </th>
+                        <th class="text-nowrap">
+                            <a href="{{ $marketingDigestSortHref('email') }}" class="text-reset text-semibold">{{ trans('messages.email') }}@if ($sort === 'email') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
+                        </th>
+                        <th class="text-nowrap">
+                            <a href="{{ $marketingDigestSortHref('frequency') }}" class="text-reset text-semibold">{{ trans('messages.marketing_digest.frequency') }}@if ($sort === 'frequency') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
+                        </th>
+                        <th class="text-nowrap">
+                            <a href="{{ $marketingDigestSortHref('sectors') }}" class="text-reset text-semibold">{{ trans('messages.marketing_digest.sectors') }}@if ($sort === 'sectors') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
+                        </th>
+                        <th class="text-nowrap">
+                            <a href="{{ $marketingDigestSortHref('unsubscribed_at') }}" class="text-reset text-semibold">{{ trans('messages.marketing_digest.subscription_status') }}@if ($sort === 'unsubscribed_at') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
+                        </th>
                         <th width="120" class="text-end">{{ trans('messages.action') }}</th>
                     </tr>
                 </thead>

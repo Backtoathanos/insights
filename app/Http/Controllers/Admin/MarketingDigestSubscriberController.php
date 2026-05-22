@@ -20,7 +20,7 @@ class MarketingDigestSubscriberController extends Controller
             $perPage = 50;
         }
 
-        $query = NewsletterPreference::query()->orderByDesc('id');
+        $query = NewsletterPreference::query();
 
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword) {
@@ -29,10 +29,25 @@ class MarketingDigestSubscriberController extends Controller
             });
         }
 
+        $allowedSorts = ['id', 'name', 'email', 'frequency', 'sectors', 'unsubscribed_at'];
+        $sort = (string) $request->query('sort', 'id');
+        if (!in_array($sort, $allowedSorts, true)) {
+            $sort = 'id';
+        }
+        $direction = strtolower((string) $request->query('direction', 'desc'));
+        $direction = $direction === 'asc' ? 'asc' : 'desc';
+
+        $query->orderBy($sort, $direction);
+        if ($sort !== 'id') {
+            $query->orderBy('id', 'desc');
+        }
+
         $preferences = $query->paginate($perPage)->appends($request->query());
 
         return view('admin.marketing_digest_subscribers.index', [
             'preferences' => $preferences,
+            'sort' => $sort,
+            'sort_direction' => $direction,
         ]);
     }
 
