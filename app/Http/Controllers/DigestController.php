@@ -62,7 +62,7 @@ class DigestController extends Controller
             DB::table('subscribers')->where('email', $email)->delete();
         }
         // Mark NewsletterPreference as unsubscribed
-        NewsletterPreference::where('email', $email)->get()->each(fn ($p) => $p->unsubscribe());
+        NewsletterPreference::forEmail($email)->get()->each(fn ($p) => $p->unsubscribe());
         return redirect()->route('digest.unsubscribed');
     }
 
@@ -108,15 +108,14 @@ class DigestController extends Controller
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return view('digest.not_found');
         }
-        $pref = NewsletterPreference::where('email', $email)->first();
+        $pref = NewsletterPreference::forEmail($email)->first();
         if (!$pref) {
             // Not in newsletter_preferences - check brsubscribers and create preference if found
             $inBrsubscribers = DB::table('subscribers')->where('email', $email)->exists();
             if (!$inBrsubscribers) {
                 return view('digest.not_found');
             }
-            $pref = NewsletterPreference::create([
-                'email' => $email,
+            $pref = NewsletterPreference::findOrCreateForEmail($email, [
                 'frequency' => NewsletterPreference::FREQUENCY_DAILY,
                 'sectors' => config('newsletter.sectors', []),
                 'token' => NewsletterPreference::generateToken(),
@@ -136,14 +135,13 @@ class DigestController extends Controller
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return redirect()->route('digest.not_found');
         }
-        $pref = NewsletterPreference::where('email', $email)->first();
+        $pref = NewsletterPreference::forEmail($email)->first();
         if (!$pref) {
             $inBrsubscribers = DB::table('subscribers')->where('email', $email)->exists();
             if (!$inBrsubscribers) {
                 return redirect()->route('digest.not_found');
             }
-            $pref = NewsletterPreference::create([
-                'email' => $email,
+            $pref = NewsletterPreference::findOrCreateForEmail($email, [
                 'frequency' => $request->input('frequency', NewsletterPreference::FREQUENCY_DAILY),
                 'sectors' => NewsletterSectorNormalizer::filterToAllowedSectors($request->input('sectors', [])),
                 'token' => NewsletterPreference::generateToken(),
@@ -447,7 +445,7 @@ class DigestController extends Controller
      */
     protected function getSectorsForEmail(string $email): array
     {
-        $pref = NewsletterPreference::where('email', $email)->first();
+        $pref = NewsletterPreference::forEmail($email)->first();
         $sectors = $pref && is_array($pref->sectors) ? $pref->sectors : [];
         return !empty($sectors) ? $sectors : ['All'];
     }
@@ -524,7 +522,43 @@ class DigestController extends Controller
     }
 
     /**
+     * Normalize email consistently with {@see logMarketingMailSend} storage.
+     */
+    protected function normalizedMarketingMailEmail(?string $email): string
+    {
+        return strtolower(trim((string) $email));
+    }
+
+    /**
+     * Map normalized email => true when that address already received a successful
+     * marketing send today (app timezone) for this batch frequency.
+     *
+     * @return array<string, true>
+     */
+    protected function marketingSuccessfulTodayLookup(string $batchFrequency): array
+    {
+        $tz = config('app.timezone');
+        $start = Carbon::now($tz)->copy()->startOfDay();
+        $end = Carbon::now($tz)->copy()->endOfDay();
+
+        $emails = MarketingMailSendLog::query()
+            ->where('batch_frequency', $batchFrequency)
+            ->where('status', MarketingMailSendLog::STATUS_SENT)
+            ->whereBetween('sent_at', [$start, $end])
+            ->pluck('email');
+
+        $lookup = [];
+        foreach ($emails as $addr) {
+            $lookup[$this->normalizedMarketingMailEmail($addr)] = true;
+        }
+
+        return $lookup;
+    }
+
+    /**
      * Marketing mail batch: subscribed newsletter_preferences on the digest list.
+     * At most one successful send per recipient per calendar day (app timezone)
+     * for the same batch_frequency (daily or weekly): repeats are skipped using marketing_mail_send_logs.
      * Daily batch: API date = yesterday (unless date override); recipients with frequency=daily only.
      * Weekly batch: up to 5 API calls backward until all sections populated (or merged); recipients frequency=weekly only;
      * runs only on configured weekday unless forceWeeklyDay is true.
@@ -544,6 +578,7 @@ class DigestController extends Controller
                     'sent' => false,
                     'message' => 'Weekly marketing mail runs only on configured weekday (MARKETING_MAIL_WEEKLY_DAY). Use ?force=1 or --force to override.',
                     'count' => 0,
+                    'skipped_already_sent_today' => 0,
                     'batch_frequency' => $batchFrequency,
                 ];
             }
@@ -558,6 +593,7 @@ class DigestController extends Controller
                 'sent' => false,
                 'message' => 'No article data available for any category. Email not sent.',
                 'count' => 0,
+                'skipped_already_sent_today' => 0,
                 'batch_frequency' => $batchFrequency,
             ];
         }
@@ -569,6 +605,7 @@ class DigestController extends Controller
                 'sent' => false,
                 'error' => 'No mail list configured. Set NEWSLETTER_DIGEST_MAIL_LIST_ID.',
                 'count' => 0,
+                'skipped_already_sent_today' => 0,
                 'batch_frequency' => $batchFrequency,
             ];
         }
@@ -587,6 +624,7 @@ class DigestController extends Controller
                 'categories' => array_keys($categories),
                 'eligible_preferences' => 0,
                 'skipped_frequency' => 0,
+                'skipped_already_sent_today' => 0,
                 'batch_frequency' => $batchFrequency,
             ];
         }
@@ -600,8 +638,18 @@ class DigestController extends Controller
             ? trim((string) $dateOverride)
             : Carbon::now()->subDay()->format('d-m-Y');
 
+        $alreadySuccessfulTodayLookup = $this->marketingSuccessfulTodayLookup($batchFrequency);
         $sent = 0;
+        $skippedAlreadySentToday = 0;
         foreach ($preferences as $pref) {
+            $emailKey = $this->normalizedMarketingMailEmail($pref->email);
+
+            if (isset($alreadySuccessfulTodayLookup[$emailKey])) {
+                $skippedAlreadySentToday++;
+
+                continue;
+            }
+
             $filtered = [];
             try {
                 $sectors = $this->getSectorsForEmail($pref->email);
@@ -633,6 +681,7 @@ class DigestController extends Controller
                     MarketingMailSendLog::STATUS_SENT,
                     MarketingMailSendLog::SOURCE_CRON
                 );
+                $alreadySuccessfulTodayLookup[$emailKey] = true;
                 $sent++;
             } catch (\Throwable $e) {
                 $this->logMarketingMailSend(
@@ -653,6 +702,7 @@ class DigestController extends Controller
             'categories' => array_keys($categories),
             'eligible_preferences' => $preferences->count(),
             'skipped_frequency' => 0,
+            'skipped_already_sent_today' => $skippedAlreadySentToday,
             'batch_frequency' => $batchFrequency,
         ];
     }
@@ -699,6 +749,7 @@ class DigestController extends Controller
             return response()->json([
                 'sent' => false,
                 'message' => $result['message'],
+                'skipped_already_sent_today' => $result['skipped_already_sent_today'] ?? 0,
                 'batch_frequency' => $result['batch_frequency'] ?? $frequency,
             ], 200);
         }
@@ -709,6 +760,7 @@ class DigestController extends Controller
             'categories' => $result['categories'] ?? [],
             'eligible_preferences' => $result['eligible_preferences'] ?? 0,
             'skipped_frequency' => $result['skipped_frequency'] ?? 0,
+            'skipped_already_sent_today' => $result['skipped_already_sent_today'] ?? 0,
             'batch_frequency' => $result['batch_frequency'] ?? $frequency,
         ];
         if (!empty($result['message'])) {

@@ -2,7 +2,9 @@
 
 namespace Acelle\Model;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
 
 class NewsletterPreference extends Model
@@ -18,6 +20,67 @@ class NewsletterPreference extends Model
         'token',
         'subscriber_data_id',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $model) {
+            $model->email = self::normalizeEmail($model->email);
+        });
+    }
+
+    /**
+     * Canonical stored form (unique index-friendly); used for lookups from any API casing.
+     */
+    public static function normalizeEmail(?string $email): string
+    {
+        return strtolower(trim((string) $email));
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeForEmail(Builder $query, ?string $email): Builder
+    {
+        $n = static::normalizeEmail($email);
+
+        return $n === '' ? $query->whereRaw('1 = 0') : $query->where('email', $n);
+    }
+
+    public static function isUniqueConstraintViolation(QueryException $e): bool
+    {
+        if (($e->errorInfo[0] ?? '') === '23000') {
+            return true;
+        }
+        $msg = strtolower($e->getMessage());
+
+        return strpos($msg, 'duplicate') !== false
+            || strpos($msg, 'unique constraint') !== false
+            || strpos($msg, 'integrity constraint') !== false;
+    }
+
+    /**
+     * Prefer this over naive create when multiple writers can race (duplicate email across APIs).
+     */
+    public static function findOrCreateForEmail(string $email, array $attributes = []): self
+    {
+        $normalized = static::normalizeEmail($email);
+
+        $existing = static::where('email', $normalized)->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        try {
+            return static::create(array_merge($attributes, ['email' => $normalized]));
+        } catch (QueryException $e) {
+            if (! static::isUniqueConstraintViolation($e)) {
+                throw $e;
+            }
+
+            return static::where('email', $normalized)->firstOrFail();
+        }
+    }
 
     protected $casts = [
         'sectors' => 'array',
@@ -56,7 +119,7 @@ class NewsletterPreference extends Model
 
     public static function findActiveByEmail(string $email): ?self
     {
-        return static::where('email', $email)->whereNull('unsubscribed_at')->first();
+        return static::forEmail($email)->whereNull('unsubscribed_at')->first();
     }
 
     public function scopeSubscribed($query)

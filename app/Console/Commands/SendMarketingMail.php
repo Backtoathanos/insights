@@ -53,6 +53,9 @@ class SendMarketingMail extends Command
         if (!empty($result['message'])) {
             $this->line($result['message']);
         }
+        if (($skipped = ($result['skipped_already_sent_today'] ?? 0)) > 0) {
+            $this->line('Skipped (already sent today for this frequency): '.$skipped);
+        }
         if (!empty($result['categories'])) {
             $this->line('Categories: ' . implode(', ', $result['categories']));
         }

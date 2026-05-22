@@ -111,7 +111,7 @@ class TransformTag implements StageInterface
             $tags['SUBSCRIBER_UID'] = $this->subscriber->uid;
 
             // Digest unsubscribe / preferences (from newsletter_preferences by email)
-            $pref = NewsletterPreference::where('email', $this->subscriber->email)->whereNull('unsubscribed_at')->first();
+            $pref = NewsletterPreference::forEmail($this->subscriber->email)->whereNull('unsubscribed_at')->first();
             if ($pref) {
                 $tags['DIGEST_UNSUBSCRIBE_URL'] = url('digest/unsubscribe/' . $pref->token);
                 $tags['DIGEST_PREFERENCES_URL'] = url('digest/preferences/' . $pref->token);

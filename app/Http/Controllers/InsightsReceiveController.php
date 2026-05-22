@@ -121,8 +121,8 @@ class InsightsReceiveController extends Controller
             $subscriberId = $existing->id;
         }
 
-        // Auto-create newsletter preference for digest (if not exists)
-        if (!NewsletterPreference::where('email', $email)->exists()) {
+        // Auto-create newsletter preference for digest (if not exists; normalized email avoids dup rows across APIs)
+        if (!NewsletterPreference::forEmail($email)->exists()) {
             $combined = '';
             if (!empty($enquiry['interest'])) {
                 $combined .= (string) $enquiry['interest'];
@@ -134,8 +134,7 @@ class InsightsReceiveController extends Controller
             if ($sectors === []) {
                 $sectors = config('newsletter.sectors');
             }
-            NewsletterPreference::create([
-                'email' => $email,
+            NewsletterPreference::findOrCreateForEmail($email, [
                 'name' => $enquiry['name'] ?? null,
                 'frequency' => NewsletterPreference::FREQUENCY_DAILY,
                 'sectors' => $sectors,

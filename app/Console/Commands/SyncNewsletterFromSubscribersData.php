@@ -22,7 +22,7 @@ class SyncNewsletterFromSubscribersData extends Command
 
         $created = 0;
         foreach ($emails as $email) {
-            if (NewsletterPreference::where('email', $email)->exists()) {
+            if (NewsletterPreference::forEmail($email)->exists()) {
                 continue;
             }
             $row = SubscriberData::where('email', $email)->where('event', 'email_verified')->first();
@@ -32,15 +32,16 @@ class SyncNewsletterFromSubscribersData extends Command
             if ($sectors === []) {
                 $sectors = config('newsletter.sectors');
             }
-            NewsletterPreference::create([
-                'email' => $email,
+            $pref = NewsletterPreference::findOrCreateForEmail($email, [
                 'name' => $row->name ?? null,
                 'frequency' => NewsletterPreference::FREQUENCY_WEEKLY,
                 'sectors' => $sectors,
                 'token' => NewsletterPreference::generateToken(),
                 'subscriber_data_id' => (string) $row->id,
             ]);
-            $created++;
+            if ($pref->wasRecentlyCreated) {
+                $created++;
+            }
         }
 
         $this->info("Created {$created} new newsletter preferences.");
