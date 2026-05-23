@@ -8,10 +8,11 @@
     <div class="page-title">
         <ul class="breadcrumb breadcrumb-caret position-right">
             <li class="breadcrumb-item"><a href="{{ action("Admin\HomeController@index") }}">{{ trans('messages.home') }}</a></li>
-            <li class="breadcrumb-item active">{{ trans('messages.marketing_digest.page_title') }}</li>
+            <li class="breadcrumb-item"><a href="{{ route('admin.live_subscribers.dashboard') }}">{{ trans('messages.live_subscribers.dashboard_title') }}</a></li>
+            <li class="breadcrumb-item active">{{ trans('messages.live_subscribers.all_subscribers_breadcrumb') }}</li>
         </ul>
         <h1>
-            <span class="text-semibold"><span class="material-symbols-rounded">mail_outline</span> {{ trans('messages.marketing_digest.page_title') }}</span>
+            <span class="text-semibold"><span class="material-symbols-rounded">mail</span> {{ trans('messages.marketing_digest.page_title') }}</span>
         </h1>
     </div>
 @endsection
@@ -36,7 +37,7 @@
             ]);
         };
     @endphp
-    <form method="get" action="{{ action('Admin\MarketingDigestSubscriberController@index') }}" class="mb-3">
+    <form method="get" action="{{ route('admin.live_subscribers.list') }}" class="mb-3">
         <input type="hidden" name="sort" value="{{ $sort }}" />
         <input type="hidden" name="direction" value="{{ $sort_direction }}" />
         <div class="filter-box d-inline-flex align-items-center">
@@ -108,7 +109,7 @@
                                     class="btn btn-sm btn-outline-primary btn-view-send-logs"
                                     data-bs-toggle="modal"
                                     data-bs-target="#marketingSendLogsModal"
-                                    data-fetch-url="{{ action('Admin\MarketingDigestSubscriberController@sendLogs', $pref) }}"
+                                    data-fetch-url="{{ route('admin.live_subscribers.send_logs', $pref) }}"
                                 >
                                     {{ trans('messages.view') }}
                                 </button>
@@ -124,7 +125,7 @@
 
         @else
             <div class="empty-list">
-                <i class="material-symbols-rounded">mail_outline</i>
+                <i class="material-symbols-rounded">mail</i>
                 <span class="line-1">{{ trans('messages.marketing_digest.empty_list') }}</span>
             </div>
         @endif

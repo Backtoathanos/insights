@@ -29,9 +29,9 @@
 				</li>
 
 				<li class="nav-item {{ $menu == 'marketing_subscribers' ? 'active' : '' }}">
-					<a href="{{ action('Admin\MarketingDigestSubscriberController@index') }}" class="nav-link lvl-1 d-flex align-items-center">
+					<a href="{{ route('admin.live_subscribers.dashboard') }}" class="nav-link lvl-1 d-flex align-items-center">
 						<i class="navbar-icon">
-							<span class="material-symbols-rounded" style="font-size: 22px;line-height:1;">mail_outline</span>
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
 						</i>
 						<span>{{ trans('messages.marketing_digest.page_title') }}</span>
 					</a>

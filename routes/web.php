@@ -934,9 +934,12 @@ Route::group(['namespace' => 'Admin', 'middleware' => ['not_installed', 'auth', 
     Route::get('admin/notifications/listing', 'NotificationController@listing');
     Route::get('admin/notifications', 'NotificationController@index');
 
-    // Marketing digest (newsletter preferences + send logs)
-    Route::get('admin/marketing_digest_subscribers/{preference}/send_logs', 'MarketingDigestSubscriberController@sendLogs');
-    Route::get('admin/marketing_digest_subscribers', 'MarketingDigestSubscriberController@index');
+    // Marketing digest / Live subscribers (newsletter preferences + send logs)
+    Route::get('admin/live_subscribers/list', 'MarketingDigestSubscriberController@index')->name('admin.live_subscribers.list');
+    Route::get('admin/live_subscribers/{preference}/send_logs', 'MarketingDigestSubscriberController@sendLogs')->whereNumber('preference')->name('admin.live_subscribers.send_logs');
+    Route::get('admin/live_subscribers', 'MarketingDigestSubscriberController@dashboard')->name('admin.live_subscribers.dashboard');
+    Route::permanentRedirect('admin/marketing_digest_subscribers', '/admin/live_subscribers/list');
+    Route::get('admin/marketing_digest_subscribers/{preference}/send_logs', 'MarketingDigestSubscriberController@sendLogs')->whereNumber('preference');
 
     // User
     Route::get('admin/users/switch/{uid}', 'UserController@switch_user');

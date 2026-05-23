@@ -22,7 +22,8 @@ class SendNewsletterDigest extends Command
             return 1;
         }
 
-        $dayOfWeek = $frequency === 'weekly' ? 2 : null; // 2 = Monday
+        // date('w'): Monday must match Kernel newsletter:send-digest weeklyOn(1, '08:00')
+        $dayOfWeek = $frequency === 'weekly' ? 1 : null;
         $preferences = NewsletterPreference::subscribed()
             ->dueForDigest($frequency, $dayOfWeek)
             ->get();
