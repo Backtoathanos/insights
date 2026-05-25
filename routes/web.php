@@ -918,7 +918,7 @@ Route::group(['middleware' => ['not_installed', 'auth', 'frontend', 'subscriptio
 
 // ADMIN AREA
 Route::group(['namespace' => 'Admin', 'middleware' => ['not_installed', 'auth', 'backend']], function () {
-    Route::get('admin', 'HomeController@index');
+    Route::get('admin', 'HomeController@index')->name('admin.home');
     Route::get('admin/docs/api/v1', 'ApiController@doc');
 
     // Search
@@ -937,7 +937,7 @@ Route::group(['namespace' => 'Admin', 'middleware' => ['not_installed', 'auth', 
     // Marketing digest / Live subscribers (newsletter preferences + send logs)
     Route::get('admin/live_subscribers/list', 'MarketingDigestSubscriberController@index')->name('admin.live_subscribers.list');
     Route::get('admin/live_subscribers/{preference}/send_logs', 'MarketingDigestSubscriberController@sendLogs')->whereNumber('preference')->name('admin.live_subscribers.send_logs');
-    Route::get('admin/live_subscribers', 'MarketingDigestSubscriberController@dashboard')->name('admin.live_subscribers.dashboard');
+    Route::permanentRedirect('admin/live_subscribers', '/admin')->name('admin.live_subscribers.dashboard');
     Route::permanentRedirect('admin/marketing_digest_subscribers', '/admin/live_subscribers/list');
     Route::get('admin/marketing_digest_subscribers/{preference}/send_logs', 'MarketingDigestSubscriberController@sendLogs')->whereNumber('preference');
 

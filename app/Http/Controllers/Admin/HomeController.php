@@ -4,10 +4,7 @@ namespace Acelle\Http\Controllers\Admin;
 
 use Acelle\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Acelle\Model\Notification;
-use Acelle\Model\Subscriber;
-use Acelle\Model\Automation2;
-use Acelle\Model\SendingDomain;
+use Acelle\Services\NewsletterAdminDashboardService;
 
 class HomeController extends Controller
 {
@@ -33,15 +30,13 @@ class HomeController extends Controller
             return redirect()->action('HomeController@index');
         }
 
-        $currentTimezone = $request->user()->admin->getTimezone();
+        $payload = NewsletterAdminDashboardService::viewPayloadForDashboard(
+            $request->user()->admin->getTimezone(),
+            (string) $request->query('charts_period', 'week')
+        );
 
-        $notifications = Notification::top();
-        return view('admin.dashboard', [
-            'notifications' => $notifications,
-            'subscribersCount' => Subscriber::count(),
-            'automationsCount' => Automation2::count(),
-            'sendingDomainsCount' => SendingDomain::count(),
-            'currentTimezone' => $currentTimezone
-        ]);
+        return view('admin.live_subscribers.dashboard', array_merge($payload, [
+            'dashboard_menu_active' => 'dashboard',
+        ]));
     }
 }

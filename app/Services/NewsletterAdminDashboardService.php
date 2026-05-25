@@ -153,6 +153,39 @@ class NewsletterAdminDashboardService
     }
 
     /**
+     * Blade payload for the Live Subscribers analytics dashboard (/admin).
+     *
+     * @return array{dash: array<string, mixed>, charts_period: string, freqDonutPayload: array<int, array<string, mixed>>}
+     */
+    public static function viewPayloadForDashboard(string $timezone, string $periodQuery): array
+    {
+        $chartsPeriod = in_array($periodQuery, ['week', 'month'], true) ? $periodQuery : 'week';
+        $dash = static::build($timezone, $chartsPeriod);
+
+        $freqDonutPayload = collect($dash['freq_donut'])->map(function (array $row) {
+            $map = [
+                'daily_active' => trans('messages.live_subscribers.freq_daily'),
+                'weekly_active' => trans('messages.live_subscribers.freq_weekly'),
+                'inactive' => trans('messages.live_subscribers.freq_inactive'),
+            ];
+
+            return ['name' => $map[$row['name']] ?? $row['name'], 'value' => $row['value']];
+        })->filter(function ($r) {
+            return (int) ($r['value'] ?? 0) > 0;
+        })->values()->all();
+
+        if ($freqDonutPayload === []) {
+            $freqDonutPayload[] = ['name' => trans('messages.live_subscribers.freq_no_data'), 'value' => 1];
+        }
+
+        return [
+            'dash' => $dash,
+            'charts_period' => $chartsPeriod,
+            'freqDonutPayload' => $freqDonutPayload,
+        ];
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     private static function cronTriggers(string $tz, int $dailyCount, int $weeklyCount): array

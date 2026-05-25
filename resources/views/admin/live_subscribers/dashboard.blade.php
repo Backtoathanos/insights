@@ -1,5 +1,5 @@
 @extends('layouts.core.backend', [
-    'menu' => 'marketing_subscribers',
+    'menu' => $dashboard_menu_active ?? 'marketing_subscribers',
 ])
 
 @section('title', trans('messages.marketing_digest.page_title'))
@@ -41,7 +41,7 @@
             </div>
         </div>
 
-        <form method="get" action="{{ route('admin.live_subscribers.dashboard') }}" class="d-inline-flex align-items-center mt-4 gap-2">
+        <form method="get" action="{{ route('admin.home') }}" class="d-inline-flex align-items-center mt-4 gap-2">
             <label class="small text-muted mb-0">{{ trans('messages.live_subscribers.charts_scope') }}</label>
             <select name="charts_period" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
                 <option value="week"{{ ($charts_period ?? 'week') === 'week' ? ' selected' : '' }}>{{ trans('messages.live_subscribers.this_week') }}</option>

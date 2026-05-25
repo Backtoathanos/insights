@@ -5,7 +5,6 @@ namespace Acelle\Http\Controllers\Admin;
 use Acelle\Http\Controllers\Controller;
 use Acelle\Model\MarketingMailSendLog;
 use Acelle\Model\NewsletterPreference;
-use Acelle\Services\NewsletterAdminDashboardService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,42 +12,6 @@ use Illuminate\Support\Facades\DB;
 
 class MarketingDigestSubscriberController extends Controller
 {
-    /**
-     * Live subscribers overview with charts driven by newsletter_preferences and marketing_mail_send_logs.
-     */
-    public function dashboard(Request $request)
-    {
-        $admin = Auth::user()->admin;
-        $period = $request->query('charts_period', 'week');
-        if (!in_array($period, ['week', 'month'], true)) {
-            $period = 'week';
-        }
-
-        $dash = NewsletterAdminDashboardService::build($admin->getTimezone(), $period);
-
-        $freqDonutPayload = collect($dash['freq_donut'])->map(function (array $row) {
-            $map = [
-                'daily_active' => trans('messages.live_subscribers.freq_daily'),
-                'weekly_active' => trans('messages.live_subscribers.freq_weekly'),
-                'inactive' => trans('messages.live_subscribers.freq_inactive'),
-            ];
-
-            return ['name' => $map[$row['name']] ?? $row['name'], 'value' => $row['value']];
-        })->filter(function ($r) {
-            return (int) ($r['value'] ?? 0) > 0;
-        })->values()->all();
-
-        if ($freqDonutPayload === []) {
-            $freqDonutPayload[] = ['name' => trans('messages.live_subscribers.freq_no_data'), 'value' => 1];
-        }
-
-        return view('admin.live_subscribers.dashboard', [
-            'dash' => $dash,
-            'charts_period' => $period,
-            'freqDonutPayload' => $freqDonutPayload,
-        ]);
-    }
-
     public function index(Request $request)
     {
         $keyword = trim((string) $request->query('keyword', ''));

@@ -8,7 +8,7 @@
     <div class="page-title">
         <ul class="breadcrumb breadcrumb-caret position-right">
             <li class="breadcrumb-item"><a href="{{ action("Admin\HomeController@index") }}">{{ trans('messages.home') }}</a></li>
-            <li class="breadcrumb-item"><a href="{{ route('admin.live_subscribers.dashboard') }}">{{ trans('messages.live_subscribers.dashboard_title') }}</a></li>
+            <li class="breadcrumb-item"><a href="{{ route('admin.home') }}">{{ trans('messages.live_subscribers.dashboard_title') }}</a></li>
             <li class="breadcrumb-item active">{{ trans('messages.live_subscribers.all_subscribers_breadcrumb') }}</li>
         </ul>
         <h1>
