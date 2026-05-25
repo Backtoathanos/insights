@@ -30,7 +30,7 @@ git reset --hard "origin/${GIT_BRANCH}"
 
 echo "==> Composer (production)"
 # shellcheck disable=SC2086
-$COMPOSER_BIN install --no-dev --prefer-dist --optimize-autoloader --no-interaction
+$COMPOSER_BIN install --no-dev --prefer-dist --optimize-autoloader --no-interaction --ignore-platform-req=ext-mailparse
 
 echo "==> Laravel optimize"
 $PHP_BIN artisan migrate --force --no-interaction
