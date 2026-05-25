@@ -50,7 +50,7 @@ class NewsletterAdminDashboardService
         $sectors = [];
         NewsletterPreference::query()
             ->whereNull('unsubscribed_at')
-            ->select(['sectors'])
+            ->select(['id', 'sectors'])
             ->orderBy('id')
             ->chunkById(200, function ($rows) use (&$sectors) {
                 foreach ($rows as $row) {
