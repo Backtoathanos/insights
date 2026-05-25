@@ -325,16 +325,50 @@ class DigestController extends Controller
     }
 
     /**
-     * Daily send: articles API uses **yesterday** relative to now (cron at 9am e.g. 20 May → date 19-05-YYYY).
+     * Daily send: articles API prefers **yesterday** (cron e.g. 9am → previous calendar day).
+     * After a closed Sunday there is typically no payload: when yesterday falls on Sunday, try Sunday first;
+     * if still no usable sections, fetch **Saturday**.
+     *
+     * @return array{categories: array<string, mixed>, api_date_dmY: string}
+     */
+    protected function resolveDailyMarketingFetch(?string $dateOverride = null): array
+    {
+        $tz = config('app.timezone');
+
+        if ($dateOverride !== null && trim((string) $dateOverride) !== '') {
+            $dm = trim((string) $dateOverride);
+            $raw = $this->fetchMarketingArticlesRawFromApi($dm);
+            $categories = $this->buildGroupedMarketingCategoriesFromApiPayload($raw);
+
+            return ['categories' => $categories, 'api_date_dmY' => $dm];
+        }
+
+        $yesterday = Carbon::now($tz)->subDay()->startOfDay();
+        $yesterdayDmY = $yesterday->format('d-m-Y');
+        $raw = $this->fetchMarketingArticlesRawFromApi($yesterdayDmY);
+        $categories = $this->buildGroupedMarketingCategoriesFromApiPayload($raw);
+
+        if ($categories !== []) {
+            return ['categories' => $categories, 'api_date_dmY' => $yesterdayDmY];
+        }
+
+        if ($yesterday->isSunday()) {
+            $saturdayDmY = $yesterday->copy()->subDay()->format('d-m-Y');
+            $rawSat = $this->fetchMarketingArticlesRawFromApi($saturdayDmY);
+            $categoriesSat = $this->buildGroupedMarketingCategoriesFromApiPayload($rawSat);
+
+            return ['categories' => $categoriesSat, 'api_date_dmY' => $saturdayDmY];
+        }
+
+        return ['categories' => [], 'api_date_dmY' => $yesterdayDmY];
+    }
+
+    /**
+     * Daily send: delegates to {@see resolveDailyMarketingFetch} (categories only).
      */
     protected function fetchMarketingArticlesDaily(?string $dateOverride = null): array
     {
-        $dateStr = $dateOverride !== null && $dateOverride !== ''
-            ? trim($dateOverride)
-            : Carbon::now()->subDay()->format('d-m-Y');
-        $raw = $this->fetchMarketingArticlesRawFromApi($dateStr);
-
-        return $this->buildGroupedMarketingCategoriesFromApiPayload($raw);
+        return $this->resolveDailyMarketingFetch($dateOverride)['categories'];
     }
 
     /**
@@ -606,7 +640,7 @@ class DigestController extends Controller
      * Marketing mail batch: subscribed newsletter_preferences on the digest list.
      * At most one successful send per recipient per calendar day (app timezone)
      * for the same batch_frequency (daily or weekly): repeats are skipped using marketing_mail_send_logs.
-     * Daily batch: API date = yesterday (unless date override); recipients with frequency=daily only.
+     * Daily batch: API date is yesterday unless empty after a closed Sunday — then attempts Saturday while links use that API date; optional date override.
      * Weekly batch: up to 5 API calls backward until all sections populated (or merged); recipients frequency=weekly only;
      * runs on MARKETING_MAIL_WEEKLY_DAY, or when that scheduled calendar day still has no successful weekly log entries
      * (catch-up after a miss); or when forceWeeklyDay is true.
@@ -629,9 +663,14 @@ class DigestController extends Controller
             ];
         }
 
-        $categories = $batchFrequency === NewsletterPreference::FREQUENCY_WEEKLY
-            ? $this->fetchMarketingArticlesWeekly($dateOverride)
-            : $this->fetchMarketingArticlesDaily($dateOverride);
+        $tz = config('app.timezone');
+        $dailyFetchMeta = null;
+        if ($batchFrequency === NewsletterPreference::FREQUENCY_WEEKLY) {
+            $categories = $this->fetchMarketingArticlesWeekly($dateOverride);
+        } else {
+            $dailyFetchMeta = $this->resolveDailyMarketingFetch($dateOverride);
+            $categories = $dailyFetchMeta['categories'];
+        }
 
         if ($categories === []) {
             return [
@@ -681,7 +720,9 @@ class DigestController extends Controller
 
         $linkFilterDateDmY = $dateOverride !== null && trim((string) $dateOverride) !== ''
             ? trim((string) $dateOverride)
-            : Carbon::now()->subDay()->format('d-m-Y');
+            : ($batchFrequency === NewsletterPreference::FREQUENCY_WEEKLY
+                ? Carbon::now($tz)->subDay()->format('d-m-Y')
+                : $dailyFetchMeta['api_date_dmY']);
 
         $alreadySuccessfulTodayLookup = $this->marketingSuccessfulTodayLookup($batchFrequency);
         $sent = 0;
@@ -878,16 +919,22 @@ class DigestController extends Controller
         $date = $request->input('date');
         $date = $date !== null && trim((string) $date) !== '' ? trim((string) $date) : null;
 
-        $categories = $frequency === NewsletterPreference::FREQUENCY_WEEKLY
-            ? $this->fetchMarketingArticlesWeekly($date)
-            : $this->fetchMarketingArticlesDaily($date);
+        $tz = config('app.timezone');
+
+        if ($frequency === NewsletterPreference::FREQUENCY_WEEKLY) {
+            $categories = $this->fetchMarketingArticlesWeekly($date);
+            $linkFilterDateDmY = $date ?? Carbon::now($tz)->subDay()->format('d-m-Y');
+        } else {
+            $dailyFetched = $this->resolveDailyMarketingFetch($date);
+            $categories = $dailyFetched['categories'];
+            $linkFilterDateDmY = $date ?? $dailyFetched['api_date_dmY'];
+        }
 
         if (empty($categories)) {
             return redirect()->route('digest.marketing_mail_check')
                 ->with('error', 'No article data available for any category. Email not sent.');
         }
 
-        $linkFilterDateDmY = $date ?? Carbon::now()->subDay()->format('d-m-Y');
         $filtered = [];
         try {
             $sectors = $this->getSectorsForEmail($request->email);
