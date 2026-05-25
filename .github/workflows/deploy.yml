@@ -1,4 +1,4 @@
-name: CI / CD — Deploy to Hostinger
+name: CI / CD — Deploy to Insights
 
 on:
   push:
@@ -53,5 +53,20 @@ jobs:
           command_timeout: 20m
           script: |
             set -euo pipefail
-            cd "${{ secrets.DEPLOY_PATH }}"
+
+            # Auto-locate the repo by finding artisan under $HOME (Hostinger layout).
+            # Falls back to DEPLOY_PATH secret if set.
+            if [[ -n "${{ secrets.DEPLOY_PATH }}" ]]; then
+              APP_DIR="${{ secrets.DEPLOY_PATH }}"
+            else
+              APP_DIR="$(find "$HOME" -maxdepth 5 -name artisan 2>/dev/null | head -1 | xargs dirname 2>/dev/null || true)"
+            fi
+
+            if [[ -z "$APP_DIR" || ! -f "$APP_DIR/artisan" ]]; then
+              echo "ERROR: Could not find Laravel root. Set the DEPLOY_PATH secret to the full path of public_html."
+              exit 1
+            fi
+
+            echo "Deploying: $APP_DIR"
+            cd "$APP_DIR"
             bash scripts/deploy.sh
