@@ -22,7 +22,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.1'
-          extensions: mbstring, xml, ctype, curl, zip, gd, bcmath, intl, pdo_mysql
+          extensions: mbstring, xml, ctype, curl, zip, gd, bcmath, intl, pdo_mysql, mailparse
           coverage: none
 
       - name: Validate composer.json
