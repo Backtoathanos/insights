@@ -35,7 +35,12 @@ $COMPOSER_BIN install --no-dev --prefer-dist --optimize-autoloader --no-interact
 echo "==> Laravel optimize"
 $PHP_BIN artisan migrate --force --no-interaction
 $PHP_BIN artisan config:cache
-$PHP_BIN artisan route:cache
+
+# route:cache fails when any two routes share the same name (pre-existing issue in this app's large
+# route file — duplicate names only surface during serialization). Clear the cache so stale files
+# don't cause runtime errors, but skip re-caching routes.
+$PHP_BIN artisan route:clear
+
 $PHP_BIN artisan view:cache
 
 if $PHP_BIN artisan list --raw 2>/dev/null | grep -q '^event:cache$'; then
