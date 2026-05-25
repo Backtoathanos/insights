@@ -327,7 +327,8 @@ class DigestController extends Controller
     /**
      * Daily send: articles API prefers **yesterday** (cron e.g. 9am → previous calendar day).
      * After a closed Sunday there is typically no payload: when yesterday falls on Sunday, try Sunday first;
-     * if still no usable sections, fetch **Saturday**.
+     * if still no usable sections, scans backwards (skipping Sunday) up to 5 weekdays.
+     * Example: Monday → tries Sunday first; empty → tries Saturday; empty → tries Friday; etc.
      *
      * @return array{categories: array<string, mixed>, api_date_dmY: string}
      */
@@ -343,28 +344,33 @@ class DigestController extends Controller
             return ['categories' => $categories, 'api_date_dmY' => $dm];
         }
 
-        $yesterday = Carbon::now($tz)->subDay()->startOfDay();
-        $yesterdayDmY = $yesterday->format('d-m-Y');
-        $raw = $this->fetchMarketingArticlesRawFromApi($yesterdayDmY);
-        $categories = $this->buildGroupedMarketingCategoriesFromApiPayload($raw);
+        // Scan back up to 5 days from yesterday.
+        // Always try yesterday first (even Sunday); if empty, skip Sunday and keep going back
+        // through weekdays until we find content or exhaust the window.
+        $anchor = Carbon::now($tz)->subDay()->startOfDay();
 
-        if ($categories !== []) {
-            return ['categories' => $categories, 'api_date_dmY' => $yesterdayDmY];
+        for ($i = 0; $i < 5; $i++) {
+            $scan = $anchor->copy()->subDays($i);
+
+            // Skip Sunday on retry passes (i > 0): API publishes nothing on Sunday.
+            if ($i > 0 && $scan->isSunday()) {
+                continue;
+            }
+
+            $dmY = $scan->format('d-m-Y');
+            $raw = $this->fetchMarketingArticlesRawFromApi($dmY);
+            $categories = $this->buildGroupedMarketingCategoriesFromApiPayload($raw);
+
+            if ($categories !== []) {
+                return ['categories' => $categories, 'api_date_dmY' => $dmY];
+            }
         }
 
-        if ($yesterday->isSunday()) {
-            $saturdayDmY = $yesterday->copy()->subDay()->format('d-m-Y');
-            $rawSat = $this->fetchMarketingArticlesRawFromApi($saturdayDmY);
-            $categoriesSat = $this->buildGroupedMarketingCategoriesFromApiPayload($rawSat);
-
-            return ['categories' => $categoriesSat, 'api_date_dmY' => $saturdayDmY];
-        }
-
-        return ['categories' => [], 'api_date_dmY' => $yesterdayDmY];
+        return ['categories' => [], 'api_date_dmY' => $anchor->format('d-m-Y')];
     }
 
     /**
-     * Daily send: delegates to {@see resolveDailyMarketingFetch} (categories only).
+     * Daily send: delegates to {@see resolveDailyMarketingFetch} — tries yesterday, then scans back up to 5 days skipping Sundays.
      */
     protected function fetchMarketingArticlesDaily(?string $dateOverride = null): array
     {
