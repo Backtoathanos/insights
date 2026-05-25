@@ -13,7 +13,7 @@ class SendMarketingMail extends Command
                             {--date= : Optional DD-MM-YYYY for the articles API (skips automatic daily/weekly date logic)}
                             {--force : Weekly batch only: send even if today is not MARKETING_MAIL_WEEKLY_DAY}';
 
-    protected $description = 'Send marketing emails: daily batch (yesterday API date) or weekly batch (multi-day API lookup; runs only on MARKETING_MAIL_WEEKLY_DAY unless --force)';
+    protected $description = 'Send marketing emails: daily batch (yesterday API date) or weekly batch (multi-day API lookup). Weekly runs on MARKETING_MAIL_WEEKLY_DAY or catches up if that day has no successful marketing_mail_send_logs yet; use --force to override.';
 
     public function handle()
     {

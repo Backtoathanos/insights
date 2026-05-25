@@ -155,7 +155,7 @@ class NewsletterPreference extends Model
             return true;
         }
         $target = self::resolveMarketingWeeklySendDay();
-        $today = (int) now()->format('w');
+        $today = (int) now(config('app.timezone'))->format('w');
 
         return $today === $target;
     }

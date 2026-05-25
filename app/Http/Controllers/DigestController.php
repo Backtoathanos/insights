@@ -556,12 +556,60 @@ class DigestController extends Controller
     }
 
     /**
+     * True if at least one successful marketing send exists for this batch type on the given calendar day (app timezone).
+     */
+    protected function marketingBatchHadSuccessfulSendOnCalendarDay(string $batchFrequency, Carbon $calendarDayInTz): bool
+    {
+        $tz = config('app.timezone');
+        $start = $calendarDayInTz->copy()->timezone($tz)->startOfDay();
+        $end = $start->copy()->endOfDay();
+
+        return MarketingMailSendLog::query()
+            ->where('batch_frequency', $batchFrequency)
+            ->where('status', MarketingMailSendLog::STATUS_SENT)
+            ->whereBetween('sent_at', [$start, $end])
+            ->exists();
+    }
+
+    /**
+     * Weekly run is allowed on MARKETING_MAIL_WEEKLY_DAY, or on a later day when the most recent past
+     * scheduled weekday (going back from yesterday up to 7 days) has no successful weekly rows in logs yet.
+     */
+    protected function weeklyMarketingAllowedBySchedule(bool $forceWeeklyDay): bool
+    {
+        if ($forceWeeklyDay) {
+            return true;
+        }
+
+        $tz = config('app.timezone');
+        $now = Carbon::now($tz);
+        $configuredDow = NewsletterPreference::resolveMarketingWeeklySendDay();
+        if ((int) $now->format('w') === $configuredDow) {
+            return true;
+        }
+
+        $scan = $now->copy()->subDay()->startOfDay();
+        for ($i = 0; $i < 7; $i++) {
+            if ((int) $scan->format('w') === $configuredDow) {
+                return !$this->marketingBatchHadSuccessfulSendOnCalendarDay(
+                    NewsletterPreference::FREQUENCY_WEEKLY,
+                    $scan
+                );
+            }
+            $scan->subDay();
+        }
+
+        return false;
+    }
+
+    /**
      * Marketing mail batch: subscribed newsletter_preferences on the digest list.
      * At most one successful send per recipient per calendar day (app timezone)
      * for the same batch_frequency (daily or weekly): repeats are skipped using marketing_mail_send_logs.
      * Daily batch: API date = yesterday (unless date override); recipients with frequency=daily only.
      * Weekly batch: up to 5 API calls backward until all sections populated (or merged); recipients frequency=weekly only;
-     * runs only on configured weekday unless forceWeeklyDay is true.
+     * runs on MARKETING_MAIL_WEEKLY_DAY, or when that scheduled calendar day still has no successful weekly log entries
+     * (catch-up after a miss); or when forceWeeklyDay is true.
      *
      * @return array<string, mixed>
      */
@@ -571,17 +619,14 @@ class DigestController extends Controller
             ? NewsletterPreference::FREQUENCY_WEEKLY
             : NewsletterPreference::FREQUENCY_DAILY;
 
-        if ($batchFrequency === NewsletterPreference::FREQUENCY_WEEKLY && !$forceWeeklyDay) {
-            $today = (int) Carbon::now()->format('w');
-            if ($today !== NewsletterPreference::resolveMarketingWeeklySendDay()) {
-                return [
-                    'sent' => false,
-                    'message' => 'Weekly marketing mail runs only on configured weekday (MARKETING_MAIL_WEEKLY_DAY). Use ?force=1 or --force to override.',
-                    'count' => 0,
-                    'skipped_already_sent_today' => 0,
-                    'batch_frequency' => $batchFrequency,
-                ];
-            }
+        if ($batchFrequency === NewsletterPreference::FREQUENCY_WEEKLY && !$this->weeklyMarketingAllowedBySchedule($forceWeeklyDay)) {
+            return [
+                'sent' => false,
+                'message' => 'Weekly marketing mail is not due: last MARKETING_MAIL_WEEKLY_DAY already has successful sends in marketing_mail_send_logs, or wait for the next scheduled day. Use ?force=1 or --force to override.',
+                'count' => 0,
+                'skipped_already_sent_today' => 0,
+                'batch_frequency' => $batchFrequency,
+            ];
         }
 
         $categories = $batchFrequency === NewsletterPreference::FREQUENCY_WEEKLY
@@ -708,8 +753,49 @@ class DigestController extends Controller
     }
 
     /**
+     * Normalize executeMarketingMail() outcome for cron JSON (single batch or nested keys in both mode).
+     *
+     * @return array<string, mixed>
+     */
+    protected function marketingMailCronBatchPayload(array $result, string $batchFrequency): array
+    {
+        if (!empty($result['error'])) {
+            return [
+                'sent' => false,
+                'error' => $result['error'],
+                'batch_frequency' => $result['batch_frequency'] ?? $batchFrequency,
+            ];
+        }
+
+        if (!empty($result['message']) && empty($result['sent'])) {
+            return [
+                'sent' => false,
+                'message' => $result['message'],
+                'skipped_already_sent_today' => $result['skipped_already_sent_today'] ?? 0,
+                'batch_frequency' => $result['batch_frequency'] ?? $batchFrequency,
+            ];
+        }
+
+        $payload = [
+            'sent' => true,
+            'count' => $result['count'],
+            'categories' => $result['categories'] ?? [],
+            'eligible_preferences' => $result['eligible_preferences'] ?? 0,
+            'skipped_frequency' => $result['skipped_frequency'] ?? 0,
+            'skipped_already_sent_today' => $result['skipped_already_sent_today'] ?? 0,
+            'batch_frequency' => $result['batch_frequency'] ?? $batchFrequency,
+        ];
+        if (!empty($result['message'])) {
+            $payload['message'] = $result['message'];
+        }
+
+        return $payload;
+    }
+
+    /**
      * Cronjob endpoint: /digest/marketingmail
-     * Query: frequency=daily (default) | weekly, optional date=DD-MM-YYYY, force=1 to bypass weekday check for weekly.
+     * Query: frequency=both (default: daily batch + weekly). Weekly runs if today is MARKETING_MAIL_WEEKLY_DAY or logs show the last scheduled weekly day had no successful sends (catch-up).
+     *        frequency=daily | weekly | both, optional date=DD-MM-YYYY, force=1 to bypass weekly log/schedule checks.
      */
     public function marketingMail(Request $request)
     {
@@ -728,13 +814,28 @@ class DigestController extends Controller
         }
         ignore_user_abort(true);
 
-        $frequency = $request->query('frequency', NewsletterPreference::FREQUENCY_DAILY);
-        $frequency = $frequency === NewsletterPreference::FREQUENCY_WEEKLY
-            ? NewsletterPreference::FREQUENCY_WEEKLY
-            : NewsletterPreference::FREQUENCY_DAILY;
+        $rawFrequency = strtolower(trim((string) $request->query('frequency', 'both')));
         $date = $request->query('date');
         $date = $date !== null ? (string) $date : null;
         $force = $request->boolean('force');
+
+        if ($rawFrequency === 'both') {
+            $dailyResult = $this->executeMarketingMail($date, NewsletterPreference::FREQUENCY_DAILY, false);
+            $weeklyResult = $this->executeMarketingMail($date, NewsletterPreference::FREQUENCY_WEEKLY, $force);
+
+            $hasError = !empty($dailyResult['error']) || !empty($weeklyResult['error']);
+            $status = $hasError ? 500 : 200;
+
+            return response()->json([
+                'mode' => 'both',
+                'daily' => $this->marketingMailCronBatchPayload($dailyResult, NewsletterPreference::FREQUENCY_DAILY),
+                'weekly' => $this->marketingMailCronBatchPayload($weeklyResult, NewsletterPreference::FREQUENCY_WEEKLY),
+            ], $status);
+        }
+
+        $frequency = $rawFrequency === NewsletterPreference::FREQUENCY_WEEKLY
+            ? NewsletterPreference::FREQUENCY_WEEKLY
+            : NewsletterPreference::FREQUENCY_DAILY;
 
         $result = $this->executeMarketingMail($date, $frequency, $force);
 
@@ -745,29 +846,10 @@ class DigestController extends Controller
             ], 500);
         }
 
-        if (!empty($result['message']) && empty($result['sent'])) {
-            return response()->json([
-                'sent' => false,
-                'message' => $result['message'],
-                'skipped_already_sent_today' => $result['skipped_already_sent_today'] ?? 0,
-                'batch_frequency' => $result['batch_frequency'] ?? $frequency,
-            ], 200);
-        }
-
-        $payload = [
-            'sent' => true,
-            'count' => $result['count'],
-            'categories' => $result['categories'] ?? [],
-            'eligible_preferences' => $result['eligible_preferences'] ?? 0,
-            'skipped_frequency' => $result['skipped_frequency'] ?? 0,
-            'skipped_already_sent_today' => $result['skipped_already_sent_today'] ?? 0,
-            'batch_frequency' => $result['batch_frequency'] ?? $frequency,
-        ];
-        if (!empty($result['message'])) {
-            $payload['message'] = $result['message'];
-        }
-
-        return response()->json($payload, 200);
+        return response()->json(
+            $this->marketingMailCronBatchPayload($result, $frequency),
+            200
+        );
     }
 
     /**
