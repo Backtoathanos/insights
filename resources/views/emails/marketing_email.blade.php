@@ -32,7 +32,7 @@
     @php
         $subscriberSectorsCsv = implode(',', array_map('trim', $linkSubscriberSectors ?? []));
         $campaignDateDmY = $linkFilterDateDmY ?? null;
-        $showMoreBase = rtrim($blogUrl, '/') . '/';
+        $showMoreBase = rtrim($blogUrl, '/') . '/newsletter';
         $showMoreUrl = \Acelle\Library\MarketingLinkQuery::append(
             $showMoreBase,
             $subscriberSectorsCsv,
