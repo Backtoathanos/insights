@@ -1,6 +1,6 @@
-name: CI / CD — Deploy to Insights
+name: Deploy to Insights
 
-on:
+'on':
   push:
     branches:
       - main
@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   ci:
-    name: CI — validate & install
+    name: Validate and install
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -36,7 +36,7 @@ jobs:
         run: php artisan --version
 
   deploy:
-    name: CD — deploy via SSH
+    name: Deploy via SSH
     runs-on: ubuntu-latest
     needs: ci
     if: github.ref == 'refs/heads/main'
