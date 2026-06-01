@@ -936,6 +936,8 @@ Route::group(['namespace' => 'Admin', 'middleware' => ['not_installed', 'auth', 
 
     // Marketing digest / Live subscribers (newsletter preferences + send logs)
     Route::get('admin/live_subscribers/list', 'MarketingDigestSubscriberController@index')->name('admin.live_subscribers.list');
+    Route::get('admin/live_subscribers/pipeline', 'MarketingDigestSubscriberController@pipeline')->name('admin.live_subscribers.pipeline');
+    Route::post('admin/live_subscribers/pipeline/{preference}/cancel', 'MarketingDigestSubscriberController@cancelPipeline')->whereNumber('preference')->name('admin.live_subscribers.pipeline.cancel');
     Route::get('admin/live_subscribers/{preference}/send_logs', 'MarketingDigestSubscriberController@sendLogs')->whereNumber('preference')->name('admin.live_subscribers.send_logs');
     Route::permanentRedirect('admin/live_subscribers', '/admin')->name('admin.live_subscribers.dashboard');
     Route::permanentRedirect('admin/marketing_digest_subscribers', '/admin/live_subscribers/list');

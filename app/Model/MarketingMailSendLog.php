@@ -45,4 +45,7 @@ class MarketingMailSendLog extends Model
     public const SOURCE_CRON = 'cron';
 
     public const SOURCE_TEST = 'test';
+
+    /** Admin cancelled a scheduled send for that calendar day (blocks cron for that recipient). */
+    public const SOURCE_ADMIN_CANCEL = 'admin_cancel';
 }

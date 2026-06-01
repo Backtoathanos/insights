@@ -147,6 +147,14 @@ class NewsletterPreference extends Model
      */
     public function shouldReceiveMarketingMailToday(): bool
     {
+        return $this->isScheduledForMarketingMailOn(now(config('app.timezone')));
+    }
+
+    /**
+     * Whether marketing mail is scheduled for this subscriber on the given calendar day (app timezone).
+     */
+    public function isScheduledForMarketingMailOn(\Carbon\Carbon $date): bool
+    {
         if (!$this->isSubscribed()) {
             return false;
         }
@@ -154,10 +162,8 @@ class NewsletterPreference extends Model
         if ($freq === self::FREQUENCY_DAILY) {
             return true;
         }
-        $target = self::resolveMarketingWeeklySendDay();
-        $today = (int) now(config('app.timezone'))->format('w');
 
-        return $today === $target;
+        return (int) $date->copy()->timezone(config('app.timezone'))->format('w') === self::resolveMarketingWeeklySendDay();
     }
 
     /**

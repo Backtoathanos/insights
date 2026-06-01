@@ -5,6 +5,7 @@ namespace Acelle\Http\Controllers\Admin;
 use Acelle\Http\Controllers\Controller;
 use Acelle\Model\MarketingMailSendLog;
 use Acelle\Model\NewsletterPreference;
+use Acelle\Services\MarketingSendPipelineService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -44,11 +45,52 @@ class MarketingDigestSubscriberController extends Controller
 
         $preferences = $query->paginate($perPage)->appends($request->query());
 
-        return view('admin.marketing_digest_subscribers.index', [
+        $viewData = [
             'preferences' => $preferences,
             'sort' => $sort,
             'sort_direction' => $direction,
+        ];
+
+        if ($request->ajax()) {
+            return view('admin.marketing_digest_subscribers._list', $viewData);
+        }
+
+        return view('admin.marketing_digest_subscribers.index', $viewData);
+    }
+
+    public function pipeline(Request $request, MarketingSendPipelineService $pipeline)
+    {
+        $keyword = trim((string) $request->query('keyword', ''));
+        $dateInput = (string) $request->query('date', '');
+
+        $built = $pipeline->buildPipeline($dateInput, $keyword !== '' ? $keyword : null);
+
+        return view('admin.marketing_digest_subscribers.pipeline', [
+            'filter_date' => $built['filter_date'],
+            'send_time_label' => $built['send_time_label'],
+            'rows' => $built['rows'],
+            'keyword' => $keyword,
+            'date_value' => $built['filter_date']->toDateString(),
         ]);
+    }
+
+    public function cancelPipeline(Request $request, NewsletterPreference $preference, MarketingSendPipelineService $pipeline)
+    {
+        $request->validate([
+            'date' => 'required|date',
+        ]);
+
+        try {
+            $pipeline->cancelScheduledSend($preference, (string) $request->input('date'));
+        } catch (\InvalidArgumentException $e) {
+            return redirect()
+                ->route('admin.live_subscribers.pipeline', ['date' => $request->input('date')])
+                ->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('admin.live_subscribers.pipeline', ['date' => $request->input('date')])
+            ->with('success', trans('messages.live_subscribers.pipeline_cancel_success'));
     }
 
     /**

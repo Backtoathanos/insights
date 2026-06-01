@@ -18,117 +18,37 @@
 @endsection
 
 @section('content')
-    @php
-        /** @var string $sort */
-        /** @var string $sort_direction */
-        $marketingDigestSortHref = function (string $column) use ($sort, $sort_direction): string {
-            if ($sort === $column && $sort_direction === 'asc') {
-                $nextDir = 'desc';
-            } elseif ($sort === $column) {
-                $nextDir = 'asc';
-            } else {
-                $nextDir = in_array($column, ['name', 'email', 'frequency', 'sectors'], true) ? 'asc' : 'desc';
-            }
-
-            return request()->fullUrlWithQuery([
-                'sort' => $column,
-                'direction' => $nextDir,
-                'page' => 1,
-            ]);
-        };
-    @endphp
-    <form method="get" action="{{ route('admin.live_subscribers.list') }}" class="mb-3">
+    <form id="live-subscribers-filter-form" class="mb-3" role="search" autocomplete="off">
         <input type="hidden" name="sort" value="{{ $sort }}" />
         <input type="hidden" name="direction" value="{{ $sort_direction }}" />
         <div class="filter-box d-inline-flex align-items-center">
             <span class="text-nowrap">
-                <input type="text" name="keyword" class="form-control search" value="{{ request('keyword') }}" placeholder="{{ trans('messages.type_to_search') }}" />
+                <input type="search" name="keyword" id="live-subscribers-keyword" class="form-control search" value="{{ request('keyword') }}" placeholder="{{ trans('messages.type_to_search') }}" />
                 <span class="material-symbols-rounded">search</span>
             </span>
-            <button type="submit" class="btn btn-secondary ms-2">{{ trans('messages.submit') }}</button>
             <span class="ms-3 d-inline-flex align-items-center">
-                <label class="me-2 mb-0 small text-muted">{{ trans('messages.num_per_page') }}</label>
-                <select class="form-select form-select-sm" name="per_page" style="width: auto;" onchange="this.form.submit()">
+                <label class="me-2 mb-0 small text-muted" for="live-subscribers-per-page">{{ trans('messages.num_per_page') }}</label>
+                <select class="form-select form-select-sm" id="live-subscribers-per-page" name="per_page" style="width: auto;">
                     @foreach ([25, 50, 100] as $n)
                         <option value="{{ $n }}"{{ (int) request('per_page', 50) === $n ? ' selected' : '' }}>{{ $n }}</option>
                     @endforeach
                 </select>
             </span>
+            <span id="live-subscribers-loading" class="ms-3 small text-muted d-none" aria-live="polite">
+                <span class="material-symbols-rounded" style="font-size:18px;vertical-align:middle;">progress_activity</span>
+            </span>
         </div>
     </form>
 
-    <div class="pml-table-container">
-        @if ($preferences->count() > 0)
-            <table class="table table-box pml-table mt-2">
-                <thead>
-                    <tr>
-                        <th class="text-nowrap">
-                            <a href="{{ $marketingDigestSortHref('id') }}" class="text-reset text-semibold">{{ trans('messages.marketing_digest.col_row_no') }}@if ($sort === 'id') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
-                        </th>
-                        <th class="text-nowrap">
-                            <a href="{{ $marketingDigestSortHref('name') }}" class="text-reset text-semibold">{{ trans('messages.name') }}@if ($sort === 'name') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
-                        </th>
-                        <th class="text-nowrap">
-                            <a href="{{ $marketingDigestSortHref('email') }}" class="text-reset text-semibold">{{ trans('messages.email') }}@if ($sort === 'email') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
-                        </th>
-                        <th class="text-nowrap">
-                            <a href="{{ $marketingDigestSortHref('frequency') }}" class="text-reset text-semibold">{{ trans('messages.marketing_digest.frequency') }}@if ($sort === 'frequency') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
-                        </th>
-                        <th class="text-nowrap">
-                            <a href="{{ $marketingDigestSortHref('sectors') }}" class="text-reset text-semibold">{{ trans('messages.marketing_digest.sectors') }}@if ($sort === 'sectors') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
-                        </th>
-                        <th class="text-nowrap">
-                            <a href="{{ $marketingDigestSortHref('unsubscribed_at') }}" class="text-reset text-semibold">{{ trans('messages.marketing_digest.subscription_status') }}@if ($sort === 'unsubscribed_at') <span class="material-symbols-rounded" style="font-size:18px;line-height:0;vertical-align:middle;">{{ $sort_direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>@endif</a>
-                        </th>
-                        <th width="120" class="text-end">{{ trans('messages.action') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($preferences as $pref)
-                        @php
-                            $sectors = is_array($pref->sectors) ? $pref->sectors : [];
-                            $sectorText = $sectors === []
-                                ? '—'
-                                : implode(', ', $sectors);
-                        @endphp
-                        <tr>
-                            <td class="text-nowrap">{{ $preferences->firstItem() + $loop->index }}</td>
-                            <td>{{ $pref->name ?: '—' }}</td>
-                            <td>{{ $pref->email }}</td>
-                            <td class="text-nowrap">{{ $pref->frequency === \Acelle\Model\NewsletterPreference::FREQUENCY_WEEKLY ? trans('messages.marketing_digest.frequency_weekly') : trans('messages.marketing_digest.frequency_daily') }}</td>
-                            <td><span title="{{ $sectorText }}">{{ \Illuminate\Support\Str::limit($sectorText, 80) }}</span></td>
-                            <td class="text-nowrap">
-                                @if ($pref->unsubscribed_at)
-                                    <span class="badge bg-secondary">{{ trans('messages.marketing_digest.status_unsubscribed') }}</span>
-                                @else
-                                    <span class="badge bg-success">{{ trans('messages.marketing_digest.status_active') }}</span>
-                                @endif
-                            </td>
-                            <td class="text-end">
-                                <button type="button"
-                                    class="btn btn-sm btn-outline-primary btn-view-send-logs"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#marketingSendLogsModal"
-                                    data-fetch-url="{{ route('admin.live_subscribers.send_logs', $pref) }}"
-                                >
-                                    {{ trans('messages.view') }}
-                                </button>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
+    <div class="mb-3">
+        <a href="{{ route('admin.live_subscribers.pipeline') }}" class="btn btn-primary">
+            <span class="material-symbols-rounded align-middle" style="font-size:20px;">schedule_send</span>
+            {{ trans('messages.live_subscribers.pipeline_open') }}
+        </a>
+    </div>
 
-            <div class="mt-3">
-                @include('helpers._pagination', ['paginator' => $preferences])
-            </div>
-
-        @else
-            <div class="empty-list">
-                <i class="material-symbols-rounded">mail</i>
-                <span class="line-1">{{ trans('messages.marketing_digest.empty_list') }}</span>
-            </div>
-        @endif
+    <div class="pml-table-container" id="live-subscribers-list" data-list-url="{{ route('admin.live_subscribers.list') }}">
+        @include('admin.marketing_digest_subscribers._list')
     </div>
 
     <div class="modal fade" id="marketingSendLogsModal" tabindex="-1" aria-labelledby="marketingSendLogsModalLabel" aria-hidden="true">
@@ -167,6 +87,144 @@
     </div>
 
     <script>
+        (function () {
+            var listRoot = document.getElementById('live-subscribers-list');
+            var filterForm = document.getElementById('live-subscribers-filter-form');
+            var loadingEl = document.getElementById('live-subscribers-loading');
+            var keywordInput = document.getElementById('live-subscribers-keyword');
+            var perPageSelect = document.getElementById('live-subscribers-per-page');
+            var debounceTimer = null;
+            var activeController = null;
+
+            function syncFormFromUrl(url) {
+                var params = new URL(url, window.location.origin).searchParams;
+                var sortInput = filterForm.querySelector('input[name="sort"]');
+                var dirInput = filterForm.querySelector('input[name="direction"]');
+                if (sortInput && params.has('sort')) {
+                    sortInput.value = params.get('sort');
+                }
+                if (dirInput && params.has('direction')) {
+                    dirInput.value = params.get('direction');
+                }
+                if (params.has('keyword')) {
+                    keywordInput.value = params.get('keyword');
+                }
+                if (params.has('per_page') && perPageSelect) {
+                    perPageSelect.value = params.get('per_page');
+                }
+            }
+
+            function buildListUrl(overrides) {
+                var base = listRoot.getAttribute('data-list-url') || window.location.pathname;
+                var params = new URLSearchParams(new FormData(filterForm));
+                if (overrides) {
+                    Object.keys(overrides).forEach(function (key) {
+                        if (overrides[key] === null || overrides[key] === '') {
+                            params.delete(key);
+                        } else {
+                            params.set(key, overrides[key]);
+                        }
+                    });
+                }
+                params.delete('page');
+                if (overrides && overrides.page) {
+                    params.set('page', overrides.page);
+                }
+                var qs = params.toString();
+
+                return qs ? base + '?' + qs : base;
+            }
+
+            function setLoading(on) {
+                if (!loadingEl) {
+                    return;
+                }
+                loadingEl.classList.toggle('d-none', !on);
+            }
+
+            function loadList(url, pushState) {
+                if (activeController) {
+                    activeController.abort();
+                }
+                activeController = new AbortController();
+                setLoading(true);
+                listRoot.classList.add('opacity-50');
+
+                fetch(url, {
+                    signal: activeController.signal,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        Accept: 'text/html',
+                    },
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) {
+                        if (!r.ok) {
+                            throw new Error('HTTP ' + r.status);
+                        }
+                        return r.text();
+                    })
+                    .then(function (html) {
+                        listRoot.innerHTML = html;
+                        if (pushState !== false) {
+                            window.history.replaceState({}, '', url);
+                        }
+                        syncFormFromUrl(url);
+                    })
+                    .catch(function (err) {
+                        if (err.name !== 'AbortError') {
+                            window.location.href = url;
+                        }
+                    })
+                    .finally(function () {
+                        setLoading(false);
+                        listRoot.classList.remove('opacity-50');
+                        activeController = null;
+                    });
+            }
+
+            if (filterForm && listRoot) {
+                filterForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    loadList(buildListUrl({ page: 1 }));
+                });
+
+                keywordInput.addEventListener('input', function () {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(function () {
+                        loadList(buildListUrl({ page: 1 }));
+                    }, 400);
+                });
+
+                keywordInput.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        clearTimeout(debounceTimer);
+                        loadList(buildListUrl({ page: 1 }));
+                    }
+                });
+
+                if (perPageSelect) {
+                    perPageSelect.addEventListener('change', function () {
+                        loadList(buildListUrl({ page: 1 }));
+                    });
+                }
+
+                listRoot.addEventListener('click', function (e) {
+                    var link = e.target.closest('a.js-live-subscribers-nav, .pagination a.page-link');
+                    if (!link || !link.href) {
+                        return;
+                    }
+                    e.preventDefault();
+                    loadList(link.href);
+                });
+            }
+
+            window.addEventListener('popstate', function () {
+                loadList(window.location.href, false);
+            });
+        })();
+
         (function () {
             var modal = document.getElementById('marketingSendLogsModal');
             if (!modal) {

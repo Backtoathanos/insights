@@ -330,9 +330,10 @@ class DigestController extends Controller
      * if still no usable sections, scans backwards (skipping Sunday) up to 5 weekdays.
      * Example: Monday → tries Sunday first; empty → tries Saturday; empty → tries Friday; etc.
      *
+     * @param  \Carbon\Carbon|null  $scheduledOn  Send calendar day (app TZ); defaults to today for cron.
      * @return array{categories: array<string, mixed>, api_date_dmY: string}
      */
-    protected function resolveDailyMarketingFetch(?string $dateOverride = null): array
+    protected function resolveDailyMarketingFetch(?string $dateOverride = null, ?Carbon $scheduledOn = null): array
     {
         $tz = config('app.timezone');
 
@@ -344,10 +345,8 @@ class DigestController extends Controller
             return ['categories' => $categories, 'api_date_dmY' => $dm];
         }
 
-        // Scan back up to 5 days from yesterday.
-        // Always try yesterday first (even Sunday); if empty, skip Sunday and keep going back
-        // through weekdays until we find content or exhaust the window.
-        $anchor = Carbon::now($tz)->subDay()->startOfDay();
+        // Scan back up to 5 days from yesterday relative to the scheduled send day.
+        $anchor = ($scheduledOn ?? Carbon::now($tz))->copy()->timezone($tz)->subDay()->startOfDay();
 
         for ($i = 0; $i < 5; $i++) {
             $scan = $anchor->copy()->subDays($i);
@@ -596,6 +595,54 @@ class DigestController extends Controller
     }
 
     /**
+     * @return array<string, true> normalized email => cancelled by admin today
+     */
+    protected function marketingAdminCancelledTodayLookup(string $batchFrequency): array
+    {
+        $tz = config('app.timezone');
+        $start = Carbon::now($tz)->copy()->startOfDay();
+        $end = Carbon::now($tz)->copy()->endOfDay();
+
+        $emails = MarketingMailSendLog::query()
+            ->where('batch_frequency', $batchFrequency)
+            ->where('batch_source', MarketingMailSendLog::SOURCE_ADMIN_CANCEL)
+            ->where('status', MarketingMailSendLog::STATUS_NOT_SENT)
+            ->whereBetween('sent_at', [$start, $end])
+            ->pluck('email');
+
+        $lookup = [];
+        foreach ($emails as $addr) {
+            $lookup[$this->normalizedMarketingMailEmail($addr)] = true;
+        }
+
+        return $lookup;
+    }
+
+    /**
+     * @return array<string, true> normalized email => cancelled by admin on calendar day
+     */
+    protected function marketingAdminCancelledOnCalendarDayLookup(string $batchFrequency, Carbon $calendarDayInTz): array
+    {
+        $tz = config('app.timezone');
+        $start = $calendarDayInTz->copy()->timezone($tz)->startOfDay();
+        $end = $start->copy()->endOfDay();
+
+        $emails = MarketingMailSendLog::query()
+            ->where('batch_frequency', $batchFrequency)
+            ->where('batch_source', MarketingMailSendLog::SOURCE_ADMIN_CANCEL)
+            ->where('status', MarketingMailSendLog::STATUS_NOT_SENT)
+            ->whereBetween('sent_at', [$start, $end])
+            ->pluck('email');
+
+        $lookup = [];
+        foreach ($emails as $addr) {
+            $lookup[$this->normalizedMarketingMailEmail($addr)] = true;
+        }
+
+        return $lookup;
+    }
+
+    /**
      * True if at least one successful marketing send exists for this batch type on the given calendar day (app timezone).
      */
     protected function marketingBatchHadSuccessfulSendOnCalendarDay(string $batchFrequency, Carbon $calendarDayInTz): bool
@@ -731,6 +778,7 @@ class DigestController extends Controller
                 : $dailyFetchMeta['api_date_dmY']);
 
         $alreadySuccessfulTodayLookup = $this->marketingSuccessfulTodayLookup($batchFrequency);
+        $adminCancelledTodayLookup = $this->marketingAdminCancelledTodayLookup($batchFrequency);
         $sent = 0;
         $skippedAlreadySentToday = 0;
         foreach ($preferences as $pref) {
@@ -739,6 +787,10 @@ class DigestController extends Controller
             if (isset($alreadySuccessfulTodayLookup[$emailKey])) {
                 $skippedAlreadySentToday++;
 
+                continue;
+            }
+
+            if (isset($adminCancelledTodayLookup[$emailKey])) {
                 continue;
             }
 
@@ -988,5 +1040,44 @@ class DigestController extends Controller
             return redirect()->route('digest.marketing_mail_check')
                 ->with('error', 'Failed to send: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Preview grouped marketing categories for a scheduled send day (admin pipeline).
+     *
+     * @return array<string, array{label: string, articles: array}>
+     */
+    public function previewMarketingCategoriesForDate(string $batchFrequency, Carbon $scheduleDate): array
+    {
+        $tz = config('app.timezone');
+        $scheduleDate = $scheduleDate->copy()->timezone($tz)->startOfDay();
+        $batchFrequency = $batchFrequency === NewsletterPreference::FREQUENCY_WEEKLY
+            ? NewsletterPreference::FREQUENCY_WEEKLY
+            : NewsletterPreference::FREQUENCY_DAILY;
+
+        if ($batchFrequency === NewsletterPreference::FREQUENCY_WEEKLY) {
+            return $this->fetchMarketingArticlesWeekly($scheduleDate->format('d-m-Y'));
+        }
+
+        return $this->resolveDailyMarketingFetch(null, $scheduleDate)['categories'];
+    }
+
+    /**
+     * @return array{categories: array, api_date_dmY: string}
+     */
+    public function resolveDailyMarketingMetaForSchedule(Carbon $scheduleDate): array
+    {
+        return $this->resolveDailyMarketingFetch(null, $scheduleDate);
+    }
+
+    /**
+     * @param  array<string, array{label?: string, articles?: array}>  $categories
+     * @return array<string, array{label: string, articles: array}>
+     */
+    public function filterMarketingCategoriesForEmail(string $email, array $categories): array
+    {
+        $sectors = $this->getSectorsForEmail($email);
+
+        return $this->filterCategoriesBySectors($categories, $sectors);
     }
 }
