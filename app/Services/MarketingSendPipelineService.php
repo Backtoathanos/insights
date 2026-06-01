@@ -3,11 +3,11 @@
 namespace Acelle\Services;
 
 use Acelle\Http\Controllers\DigestController;
+use Acelle\Library\MarketingArticleUrl;
 use Acelle\Model\MarketingMailSendLog;
 use Acelle\Model\NewsletterPreference;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 
 class MarketingSendPipelineService
 {
@@ -67,7 +67,7 @@ class MarketingSendPipelineService
                 'name' => $pref->name ?: '—',
                 'email' => $pref->email,
                 'interests' => $sectorText,
-                'contents' => $this->summarizeContents($filtered),
+                'content_groups' => $this->buildContentGroups($filtered),
                 'frequency' => $frequency,
                 'frequency_label' => $frequency === NewsletterPreference::FREQUENCY_WEEKLY
                     ? trans('messages.marketing_digest.frequency_weekly')
@@ -209,29 +209,43 @@ class MarketingSendPipelineService
     }
 
     /**
-     * @param  array<string, array{label?: string, articles?: array}>  $categories
+     * Grouped content for pipeline UI: category label → list of {label, url}.
+     *
+     * @param  array<string, array{label?: string, articles?: array<int, array<string, mixed>>}>  $categories
+     * @return array<int, array{label: string, items: array<int, array{label: string, url: string}>}>
      */
-    private function summarizeContents(array $categories): string
+    private function buildContentGroups(array $categories): array
     {
         if ($categories === []) {
-            return trans('messages.live_subscribers.pipeline_no_content');
+            return [];
         }
 
-        $parts = [];
-        foreach ($categories as $key => $data) {
-            $label = $data['label'] ?? $key;
-            $count = count($data['articles'] ?? []);
-            $titles = [];
-            foreach (array_slice($data['articles'] ?? [], 0, 2) as $article) {
-                if (!empty($article['title'])) {
-                    $titles[] = (string) $article['title'];
+        $groups = [];
+        foreach ($categories as $categoryKey => $data) {
+            $items = [];
+            foreach ($data['articles'] ?? [] as $article) {
+                if (!is_array($article)) {
+                    continue;
                 }
+                $url = MarketingArticleUrl::publicUrl($article, (string) $categoryKey);
+                if ($url === null) {
+                    continue;
+                }
+                $items[] = [
+                    'label' => MarketingArticleUrl::linkLabel($article),
+                    'url' => $url,
+                ];
             }
-            $snippet = $titles !== [] ? ': ' . implode('; ', $titles) : '';
-            $parts[] = $label . ' (' . $count . ')' . $snippet;
+            if ($items === []) {
+                continue;
+            }
+            $groups[] = [
+                'label' => (string) ($data['label'] ?? $categoryKey),
+                'items' => $items,
+            ];
         }
 
-        return Str::limit(implode(' · ', $parts), 200);
+        return $groups;
     }
 
     /**

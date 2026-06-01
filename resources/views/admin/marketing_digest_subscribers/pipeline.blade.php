@@ -67,7 +67,24 @@
                                 <div class="small text-muted2">{{ $row['email'] }}</div>
                             </td>
                             <td><span title="{{ $row['interests'] }}">{{ \Illuminate\Support\Str::limit($row['interests'], 60) }}</span></td>
-                            <td><span title="{{ $row['contents'] }}">{{ $row['contents'] }}</span></td>
+                            <td class="pipeline-contents-cell">
+                                @if (empty($row['content_groups']))
+                                    <span class="text-muted2">{{ trans('messages.live_subscribers.pipeline_no_content') }}</span>
+                                @else
+                                    @foreach ($row['content_groups'] as $group)
+                                        <div class="pipeline-content-group mb-2">
+                                            <div class="fw-semibold small">{{ $group['label'] }}:</div>
+                                            <ul class="mb-0 ps-3 small pipeline-content-list">
+                                                @foreach ($group['items'] as $item)
+                                                    <li>
+                                                        <a href="{{ $item['url'] }}" target="_blank" rel="noopener noreferrer">{{ $item['label'] }}</a>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @endforeach
+                                @endif
+                            </td>
                             <td class="text-nowrap">{{ $row['frequency_label'] }}</td>
                             <td class="text-nowrap">{{ $row['send_at_label'] }}</td>
                             <td class="text-nowrap">{{ $row['delivery_status'] }}</td>
