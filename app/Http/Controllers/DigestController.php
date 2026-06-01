@@ -659,8 +659,7 @@ class DigestController extends Controller
     }
 
     /**
-     * Weekly run is allowed on MARKETING_MAIL_WEEKLY_DAY, or on a later day when the most recent past
-     * scheduled weekday (going back from yesterday up to 7 days) has no successful weekly rows in logs yet.
+     * Weekly batch runs only on MARKETING_MAIL_WEEKLY_DAY (app timezone), unless force is set.
      */
     protected function weeklyMarketingAllowedBySchedule(bool $forceWeeklyDay): bool
     {
@@ -669,24 +668,33 @@ class DigestController extends Controller
         }
 
         $tz = config('app.timezone');
-        $now = Carbon::now($tz);
         $configuredDow = NewsletterPreference::resolveMarketingWeeklySendDay();
-        if ((int) $now->format('w') === $configuredDow) {
-            return true;
+
+        return (int) Carbon::now($tz)->format('w') === $configuredDow;
+    }
+
+    /**
+     * Any marketing_mail_send_logs row today (sent, cancelled, failed, etc.) for this batch type.
+     *
+     * @return array<string, true>
+     */
+    protected function marketingLoggedTodayLookup(string $batchFrequency): array
+    {
+        $tz = config('app.timezone');
+        $start = Carbon::now($tz)->copy()->startOfDay();
+        $end = Carbon::now($tz)->copy()->endOfDay();
+
+        $emails = MarketingMailSendLog::query()
+            ->where('batch_frequency', $batchFrequency)
+            ->whereBetween('sent_at', [$start, $end])
+            ->pluck('email');
+
+        $lookup = [];
+        foreach ($emails as $addr) {
+            $lookup[$this->normalizedMarketingMailEmail($addr)] = true;
         }
 
-        $scan = $now->copy()->subDay()->startOfDay();
-        for ($i = 0; $i < 7; $i++) {
-            if ((int) $scan->format('w') === $configuredDow) {
-                return !$this->marketingBatchHadSuccessfulSendOnCalendarDay(
-                    NewsletterPreference::FREQUENCY_WEEKLY,
-                    $scan
-                );
-            }
-            $scan->subDay();
-        }
-
-        return false;
+        return $lookup;
     }
 
     /**
@@ -695,8 +703,7 @@ class DigestController extends Controller
      * for the same batch_frequency (daily or weekly): repeats are skipped using marketing_mail_send_logs.
      * Daily batch: API date is yesterday unless empty after a closed Sunday — then attempts Saturday while links use that API date; optional date override.
      * Weekly batch: up to 5 API calls backward until all sections populated (or merged); recipients frequency=weekly only;
-     * runs on MARKETING_MAIL_WEEKLY_DAY, or when that scheduled calendar day still has no successful weekly log entries
-     * (catch-up after a miss); or when forceWeeklyDay is true.
+     * runs on MARKETING_MAIL_WEEKLY_DAY only (unless forceWeeklyDay). Skips recipients who already have any log row today.
      *
      * @return array<string, mixed>
      */
@@ -709,7 +716,7 @@ class DigestController extends Controller
         if ($batchFrequency === NewsletterPreference::FREQUENCY_WEEKLY && !$this->weeklyMarketingAllowedBySchedule($forceWeeklyDay)) {
             return [
                 'sent' => false,
-                'message' => 'Weekly marketing mail is not due: last MARKETING_MAIL_WEEKLY_DAY already has successful sends in marketing_mail_send_logs, or wait for the next scheduled day. Use ?force=1 or --force to override.',
+                'message' => 'Weekly marketing mail runs only on MARKETING_MAIL_WEEKLY_DAY (not today). Use ?force=1 or --force to override.',
                 'count' => 0,
                 'skipped_already_sent_today' => 0,
                 'batch_frequency' => $batchFrequency,
@@ -777,20 +784,15 @@ class DigestController extends Controller
                 ? Carbon::now($tz)->subDay()->format('d-m-Y')
                 : $dailyFetchMeta['api_date_dmY']);
 
-        $alreadySuccessfulTodayLookup = $this->marketingSuccessfulTodayLookup($batchFrequency);
-        $adminCancelledTodayLookup = $this->marketingAdminCancelledTodayLookup($batchFrequency);
+        $loggedTodayLookup = $this->marketingLoggedTodayLookup($batchFrequency);
         $sent = 0;
         $skippedAlreadySentToday = 0;
         foreach ($preferences as $pref) {
             $emailKey = $this->normalizedMarketingMailEmail($pref->email);
 
-            if (isset($alreadySuccessfulTodayLookup[$emailKey])) {
+            if (isset($loggedTodayLookup[$emailKey])) {
                 $skippedAlreadySentToday++;
 
-                continue;
-            }
-
-            if (isset($adminCancelledTodayLookup[$emailKey])) {
                 continue;
             }
 
@@ -825,7 +827,7 @@ class DigestController extends Controller
                     MarketingMailSendLog::STATUS_SENT,
                     MarketingMailSendLog::SOURCE_CRON
                 );
-                $alreadySuccessfulTodayLookup[$emailKey] = true;
+                $loggedTodayLookup[$emailKey] = true;
                 $sent++;
             } catch (\Throwable $e) {
                 $this->logMarketingMailSend(
@@ -893,7 +895,7 @@ class DigestController extends Controller
 
     /**
      * Cronjob endpoint: /digest/marketingmail
-     * Query: frequency=both (default: daily batch + weekly). Weekly runs if today is MARKETING_MAIL_WEEKLY_DAY or logs show the last scheduled weekly day had no successful sends (catch-up).
+     * Query: frequency=both (default: daily batch + weekly). Weekly runs only when today is MARKETING_MAIL_WEEKLY_DAY (unless force=1).
      *        frequency=daily | weekly | both, optional date=DD-MM-YYYY, force=1 to bypass weekly log/schedule checks.
      */
     public function marketingMail(Request $request)
