@@ -26,7 +26,7 @@
         <div class="alert alert-danger">{{ session('error') }}</div>
     @endif
 
-    <form method="get" action="{{ route('admin.live_subscribers.pipeline') }}" class="mb-4">
+    <form method="get" action="{{ route('admin.live_subscribers.pipeline') }}" class="mb-4" id="pipeline-filter-form">
         <div class="row g-3 align-items-end">
             <div class="col-auto">
                 <label for="pipeline-date" class="form-label mb-0">{{ trans('messages.live_subscribers.pipeline_filter_date') }}</label>
@@ -35,6 +35,14 @@
             <div class="col-auto">
                 <label for="pipeline-keyword" class="form-label mb-0">{{ trans('messages.type_to_search') }}</label>
                 <input type="search" id="pipeline-keyword" name="keyword" class="form-control" value="{{ $keyword }}" placeholder="{{ trans('messages.type_to_search') }}" />
+            </div>
+            <div class="col-auto">
+                <label for="pipeline-per-page" class="form-label mb-0">{{ trans('messages.num_per_page') }}</label>
+                <select id="pipeline-per-page" name="per_page" class="form-select" style="width: auto;">
+                    @foreach ([25, 50, 100] as $n)
+                        <option value="{{ $n }}"{{ $per_page === $n ? ' selected' : '' }}>{{ $n }}</option>
+                    @endforeach
+                </select>
             </div>
             <div class="col-auto">
                 <button type="submit" class="btn btn-secondary">{{ trans('messages.submit') }}</button>
@@ -46,7 +54,14 @@
     </form>
 
     <div class="pml-table-container">
-        @if (count($rows) > 0)
+        @if ($rows->total() > 0)
+            {{-- Row count summary --}}
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="small text-muted2">
+                    Showing {{ $rows->firstItem() }}–{{ $rows->lastItem() }} of {{ $rows->total() }} entries
+                </span>
+            </div>
+
             <table class="table table-box pml-table">
                 <thead>
                     <tr>
@@ -105,6 +120,11 @@
                     @endforeach
                 </tbody>
             </table>
+
+            {{-- Pagination --}}
+            <div class="mt-3">
+                @include('helpers._pagination', ['paginator' => $rows])
+            </div>
         @else
             <div class="empty-list">
                 <i class="material-symbols-rounded">schedule_send</i>
@@ -112,4 +132,23 @@
             </div>
         @endif
     </div>
+
+    <script>
+        (function () {
+            var form = document.getElementById('pipeline-filter-form');
+            var perPageSelect = document.getElementById('pipeline-per-page');
+
+            // Auto-submit when per-page dropdown changes (resets to page 1)
+            if (perPageSelect && form) {
+                perPageSelect.addEventListener('change', function () {
+                    // Remove any existing page param so we go back to page 1
+                    var pageInput = form.querySelector('input[name="page"]');
+                    if (pageInput) {
+                        pageInput.remove();
+                    }
+                    form.submit();
+                });
+            }
+        })();
+    </script>
 @endsection

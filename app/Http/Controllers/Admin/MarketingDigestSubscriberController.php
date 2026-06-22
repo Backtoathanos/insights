@@ -8,6 +8,7 @@ use Acelle\Model\NewsletterPreference;
 use Acelle\Services\MarketingSendPipelineService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -63,14 +64,36 @@ class MarketingDigestSubscriberController extends Controller
         $keyword = trim((string) $request->query('keyword', ''));
         $dateInput = (string) $request->query('date', '');
 
+        $perPage = (int) $request->query('per_page', 50);
+        if (!in_array($perPage, [25, 50, 100], true)) {
+            $perPage = 50;
+        }
+        $page = max(1, (int) $request->query('page', 1));
+
         $built = $pipeline->buildPipeline($dateInput, $keyword !== '' ? $keyword : null);
 
+        $allRows = $built['rows'];
+        $total   = count($allRows);
+        $offset  = ($page - 1) * $perPage;
+
+        $paginator = new LengthAwarePaginator(
+            array_slice($allRows, $offset, $perPage),
+            $total,
+            $perPage,
+            $page,
+            [
+                'path'  => $request->url(),
+                'query' => $request->except('page'),
+            ]
+        );
+
         return view('admin.marketing_digest_subscribers.pipeline', [
-            'filter_date' => $built['filter_date'],
+            'filter_date'    => $built['filter_date'],
             'send_time_label' => $built['send_time_label'],
-            'rows' => $built['rows'],
-            'keyword' => $keyword,
-            'date_value' => $built['filter_date']->toDateString(),
+            'rows'           => $paginator,
+            'keyword'        => $keyword,
+            'date_value'     => $built['filter_date']->toDateString(),
+            'per_page'       => $perPage,
         ]);
     }
 
